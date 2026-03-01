@@ -1,12 +1,6 @@
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'VCM <noreply@yourdomain.com>';
 
-/**
- * Envia o e-mail de redefinição de senha.
- * Em produção usa Resend (se RESEND_API_KEY configurado).
- * Em desenvolvimento loga o link no console.
- *
- * @param {{ email: string, token: string }} params
- */
 async function sendPasswordReset({ email, token }) {
   const resetUrl = `${FRONTEND_URL}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 
@@ -14,7 +8,7 @@ async function sendPasswordReset({ email, token }) {
     const { Resend } = require('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: 'VCM <noreply@yourdomain.com>',
+      from: EMAIL_FROM,
       to: email,
       subject: 'Redefinição de senha — VCM',
       html: `
