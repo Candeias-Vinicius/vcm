@@ -7,7 +7,7 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: 'lax',
+  sameSite: IS_PROD ? 'none' : 'lax',
   secure: IS_PROD,
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
@@ -131,7 +131,7 @@ router.post('/login', async (req, res) => {
  *         description: Sessão encerrada. Cookie removido.
  */
 router.post('/logout', requireAuth, (req, res) => {
-  res.clearCookie('vcm_token', { httpOnly: true, sameSite: 'lax', secure: IS_PROD });
+  res.clearCookie('vcm_token', { httpOnly: true, sameSite: IS_PROD ? 'none' : 'lax', secure: IS_PROD });
   res.json({ message: 'Logout realizado com sucesso' });
 });
 
