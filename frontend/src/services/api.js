@@ -1,5 +1,6 @@
-const BASE = '/api/lobbies';
-const AUTH = '/api/auth';
+const API_BASE = import.meta.env.VITE_API_URL || '';
+const BASE = `${API_BASE}/api/lobbies`;
+const AUTH = `${API_BASE}/api/auth`;
 
 async function request(url, options = {}) {
   const res = await fetch(url, {
