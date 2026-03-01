@@ -1,0 +1,409 @@
+const express = require('express');
+const router = express.Router();
+const service = require('../services/lobby.service');
+const { requireAuth } = require('../middleware/auth');
+
+/**
+ * @swagger
+ * tags:
+ *   name: Lobbies
+ *   description: Gerenciamento de partidas
+ */
+
+/**
+ * @swagger
+ * /lobbies:
+ *   get:
+ *     tags: [Lobbies]
+ *     summary: Listar todas as partidas
+ *     description: Retorna todas as partidas em ordem cronológica (ativas e canceladas).
+ *     responses:
+ *       200:
+ *         description: Lista de lobbies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Lobby'
+ */
+router.get('/', async (req, res) => {
+  try {
+    const lobbies = await service.getLobbies();
+    res.json(lobbies);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}:
+ *   get:
+ *     tags: [Lobbies]
+ *     summary: Buscar partida por ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: lobby_id (UUID)
+ *     responses:
+ *       200:
+ *         description: Dados da partida
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       404:
+ *         description: Lobby não encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const lobby = await service.getLobbyById(req.params.id);
+    if (!lobby) return res.status(404).json({ error: 'Lobby não encontrado' });
+    res.json(lobby);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Criar nova partida
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [data_hora]
+ *             properties:
+ *               mapa:
+ *                 type: string
+ *                 example: Haven
+ *               data_hora:
+ *                 type: string
+ *                 format: date-time
+ *               total_partidas:
+ *                 type: integer
+ *                 example: 3
+ *               max_players:
+ *                 type: integer
+ *                 minimum: 2
+ *                 maximum: 10
+ *                 default: 10
+ *               adm_is_player:
+ *                 type: boolean
+ *                 default: true
+ *     responses:
+ *       201:
+ *         description: Partida criada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 lobby_id:
+ *                   type: string
+ *                   format: uuid
+ *       401:
+ *         description: Não autenticado
+ */
+router.post('/', requireAuth, async (req, res) => {
+  try {
+    const { mapa, data_hora, total_partidas, max_players, adm_is_player } = req.body;
+    if (!data_hora) return res.status(400).json({ error: 'data_hora é obrigatório' });
+    const lobby = await service.createLobby({
+      mapa, data_hora, total_partidas, max_players, adm_is_player,
+      adm_nick: req.user.nick,
+      adm_user_id: req.user.id,
+    });
+    req.io.to(lobby.lobby_id).emit('lobby_updated', lobby);
+    res.status(201).json({ lobby_id: lobby.lobby_id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/join:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Entrar na partida
+ *     description: Adiciona o usuário autenticado aos titulares (se houver vaga) ou à lista de espera.
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lobby atualizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Lobby lotado, partida cancelada ou usuário já presente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/:id/join', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.joinLobby(req.params.id, { nick: req.user.nick });
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/checkin:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Confirmar presença de jogador (ADM)
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [nick]
+ *             properties:
+ *               nick:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Lobby atualizado com presença confirmada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Jogador não encontrado ou sem permissão
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/:id/checkin', requireAuth, async (req, res) => {
+  try {
+    const { nick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'nick é obrigatório' });
+    const lobby = await service.confirmCheckin(req.params.id, nick, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/kick:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Remover jogador da partida (ADM)
+ *     description: Remove o jogador dos titulares, promove o primeiro da fila e coloca o removido no fim da espera.
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [nick]
+ *             properties:
+ *               nick:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Lobby atualizado após remoção
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Jogador não encontrado ou sem permissão
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/:id/kick', requireAuth, async (req, res) => {
+  try {
+    const { nick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'nick é obrigatório' });
+    const lobby = await service.kickPlayer(req.params.id, nick, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/toggle-player:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: ADM alterna participação como jogador
+ *     description: Se o ADM está nos titulares, sai e promove o primeiro da fila. Se não está, entra (requer vaga).
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lobby atualizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Sem permissão ou sem vagas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/:id/toggle-player', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.admTogglePlayer(req.params.id, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/cancel:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Cancelar partida (ADM)
+ *     description: Muda o status para cancelled. A partida ainda aparece na timeline mas não bloqueia o horário.
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Partida cancelada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Sem permissão ou partida já cancelada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/:id/cancel', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.cancelLobby(req.params.id, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}:
+ *   patch:
+ *     tags: [Lobbies]
+ *     summary: Editar configurações da partida (ADM)
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               mapa:
+ *                 type: string
+ *               total_partidas:
+ *                 type: integer
+ *               max_players:
+ *                 type: integer
+ *                 minimum: 2
+ *                 maximum: 10
+ *     responses:
+ *       200:
+ *         description: Lobby atualizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Sem permissão ou valor inválido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.patch('/:id', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.updateConfig(req.params.id, req.body, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+module.exports = router;
