@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authService = require('../services/auth.service');
+const userRepo = require('../repositories/user.repository');
 const { requireAuth } = require('../middleware/auth');
 
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -157,7 +158,13 @@ router.post('/logout', requireAuth, (req, res) => {
  *         description: Não autenticado
  */
 router.get('/me', requireAuth, async (req, res) => {
-  res.json({ user: { id: req.user.id, nick: req.user.nick, email: req.user.email } });
+  try {
+    const user = await userRepo.findById(req.user.id);
+    if (!user) return res.status(401).json({ error: 'Usuário não encontrado. Faça login novamente.' });
+    res.json({ user: { id: user._id, nick: user.nick, email: user.email } });
+  } catch {
+    res.status(500).json({ error: 'Erro ao verificar sessão.' });
+  }
 });
 
 /**

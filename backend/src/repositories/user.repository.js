@@ -1,5 +1,9 @@
 const User = require('../models/User');
 
+function findById(id) {
+  return User.findById(id);
+}
+
 function findByEmail(email) {
   return User.findOne({ email: email.toLowerCase() });
 }
@@ -26,6 +30,7 @@ function save(user) {
 }
 
 module.exports = {
+  findById,
   findByEmail,
   findByNick,
   findByLoginInput,
