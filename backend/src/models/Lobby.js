@@ -86,9 +86,6 @@ lobbySchema.methods.togglePosition = function (nick) {
 
   const playerIdx = this.players.findIndex(p => p.nick === nick);
   if (playerIdx !== -1) {
-    if (this.players[playerIdx].is_adm) {
-      throw new Error('O ADM não pode migrar para a lista de espera.');
-    }
     if (!this.hasWaitlistRoom()) throw new Error('Lista de espera está cheia.');
     this.players.splice(playerIdx, 1);
     this.promoteFromWaitlist();
@@ -100,7 +97,8 @@ lobbySchema.methods.togglePosition = function (nick) {
   if (waitIdx !== -1) {
     if (this.isFull()) throw new Error('Sem vagas disponíveis nos titulares.');
     this.waitlist.splice(waitIdx, 1);
-    this.players.push({ nick, is_present: false, is_adm: false });
+    // Restore is_adm flag if this is the ADM returning to players
+    this.players.push({ nick, is_present: false, is_adm: this.config.adm_nick === nick });
     return;
   }
 
@@ -125,6 +123,40 @@ lobbySchema.methods.leave = function (nick) {
   }
 
   throw new Error('Você não está nesta partida');
+};
+
+// ADM leaving: transfers role to next player/waitlist or auto-cancels if nobody left.
+// Returns the nick of the new ADM, or null if cancelled.
+lobbySchema.methods.admLeave = function () {
+  // Remove ADM from players (if they're playing)
+  const playerIdx = this.players.findIndex(p => p.is_adm);
+  if (playerIdx !== -1) {
+    this.players.splice(playerIdx, 1);
+    this.promoteFromWaitlist();
+  } else {
+    // ADM might be in waitlist (went there via togglePosition)
+    const waitIdx = this.waitlist.findIndex(p => p.nick === this.config.adm_nick);
+    if (waitIdx !== -1) {
+      this.waitlist.splice(waitIdx, 1);
+    }
+    // If ADM is pure observer (not in players or waitlist), nothing to remove
+  }
+
+  // Find next candidate: first non-ADM player, then first waitlist entry
+  const nextPlayer = this.players.find(p => !p.is_adm);
+  if (nextPlayer) {
+    nextPlayer.is_adm = true;
+    return nextPlayer.nick;
+  }
+
+  const nextWaiter = this.waitlist[0];
+  if (nextWaiter) {
+    return nextWaiter.nick;
+  }
+
+  // Nobody left — auto-cancel
+  this.cancel();
+  return null;
 };
 
 lobbySchema.methods.confirmCheckin = function (nick) {
