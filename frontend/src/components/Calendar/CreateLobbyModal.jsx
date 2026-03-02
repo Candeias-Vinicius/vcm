@@ -13,9 +13,9 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
   const [form, setForm] = useState({
     mapa: maps[0],
     data_hora: nextFullHour(),
-    total_partidas: 3,
     adm_is_player: true,
     max_players: 10,
+    waitlist_limit: 20,
   });
 
   function update(key, value) {
@@ -59,18 +59,6 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
           </div>
 
           <div>
-            <label className="text-gray-400 text-sm mb-1 block">Total de Partidas</label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={form.total_partidas}
-              onChange={e => update('total_partidas', Number(e.target.value))}
-              className="w-full bg-valorant-dark border border-valorant-border text-white px-3 py-2 rounded-lg"
-            />
-          </div>
-
-          <div>
             <label className="text-gray-400 text-sm mb-1 block">Vagas (máx. jogadores, 2–10)</label>
             <input
               type="number"
@@ -78,6 +66,18 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
               max={10}
               value={form.max_players}
               onChange={e => update('max_players', Number(e.target.value))}
+              className="w-full bg-valorant-dark border border-valorant-border text-white px-3 py-2 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="text-gray-400 text-sm mb-1 block">Limite da lista de espera</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={form.waitlist_limit}
+              onChange={e => update('waitlist_limit', Number(e.target.value))}
               className="w-full bg-valorant-dark border border-valorant-border text-white px-3 py-2 rounded-lg"
             />
           </div>

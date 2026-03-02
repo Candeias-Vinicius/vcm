@@ -14,6 +14,7 @@ const swaggerSpec = require('./config/swagger');
 const lobbyRoutes = require('./routes/lobby.routes');
 const authRoutes = require('./routes/auth.routes');
 const registerSocketHandlers = require('./socket/lobby.socket');
+const { startScheduler } = require('./jobs/lobby.scheduler');
 
 const app = express();
 const server = http.createServer(app);
@@ -78,6 +79,7 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 registerSocketHandlers(io);
+startScheduler(io);
 
 const PORT = process.env.PORT || 3001;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/vcm';

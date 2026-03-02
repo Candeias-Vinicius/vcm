@@ -5,9 +5,10 @@ function assertLobbyExists(lobby) {
   if (!lobby) throw new Error('Lobby não encontrado');
 }
 
-async function createLobby({ mapa, data_hora, total_partidas, max_players, adm_is_player, adm_nick, adm_user_id }) {
+async function createLobby({ mapa, data_hora, max_players, waitlist_limit, adm_is_player, adm_nick, adm_user_id }) {
   const lobby_id = uuidv4();
   const cappedMax = Math.min(10, Math.max(2, Number(max_players) || 10));
+  const cappedWaitlist = Math.max(1, Number(waitlist_limit) || 20);
 
   const players = adm_is_player
     ? [{ nick: adm_nick, is_present: true, is_adm: true }]
@@ -16,8 +17,8 @@ async function createLobby({ mapa, data_hora, total_partidas, max_players, adm_i
   return lobbyRepo.create({
     lobby_id,
     adm_user_id,
-    status: 'active',
-    config: { mapa, data_hora, total_partidas, max_players: cappedMax, adm_nick, adm_is_player },
+    status: 'WAITING',
+    config: { mapa, data_hora, max_players: cappedMax, waitlist_limit: cappedWaitlist, adm_nick, adm_is_player },
     players,
     waitlist: [],
   });
@@ -70,6 +71,30 @@ async function updateConfig(lobby_id, updates, userId) {
   return lobbyRepo.save(lobby);
 }
 
+async function startMatch(lobby_id, userId) {
+  const lobby = await lobbyRepo.findById(lobby_id);
+  assertLobbyExists(lobby);
+  lobby.assertAdmin(userId);
+  lobby.start();
+  return lobbyRepo.save(lobby);
+}
+
+async function nextMatch(lobby_id, userId) {
+  const lobby = await lobbyRepo.findById(lobby_id);
+  assertLobbyExists(lobby);
+  lobby.assertAdmin(userId);
+  lobby.nextMatch();
+  return lobbyRepo.save(lobby);
+}
+
+async function leaveLobby(lobby_id, nick) {
+  const lobby = await lobbyRepo.findById(lobby_id);
+  assertLobbyExists(lobby);
+  lobby.assertActive();
+  lobby.leave(nick);
+  return lobbyRepo.save(lobby);
+}
+
 function getLobbies() {
   return lobbyRepo.findAll();
 }
@@ -86,6 +111,9 @@ module.exports = {
   admTogglePlayer,
   cancelLobby,
   updateConfig,
+  startMatch,
+  nextMatch,
+  leaveLobby,
   getLobbies,
   getLobbyById,
 };

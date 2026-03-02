@@ -4,6 +4,7 @@ import { Clock, Users, Plus, Calendar, LogOut } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CreateLobbyModal from '../components/Calendar/CreateLobbyModal';
+import { formatDate, formatTime, formatWeekday } from '../utils/date';
 
 const MAPS = ['Haven', 'Bind', 'Split', 'Ascent', 'Icebox', 'Breeze', 'Fracture', 'Pearl', 'Lotus', 'Sunset', 'Abyss', 'Corrode'];
 
@@ -11,13 +12,12 @@ const MAP_IMAGE = Object.fromEntries(
   MAPS.map(m => [m, `/maps/${m.toLowerCase()}.webp`])
 );
 
-function formatDateTime(dateStr) {
-  const d = new Date(dateStr);
-  const weekday = d.toLocaleDateString('pt-BR', { weekday: 'long' });
-  const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  return { weekday: weekday.charAt(0).toUpperCase() + weekday.slice(1), date, time };
-}
+const STATUS_BADGE = {
+  WAITING:   { label: 'Aguardando', cls: 'bg-green-900/80 text-green-300' },
+  IN_GAME:   { label: 'Em jogo',    cls: 'bg-yellow-900/80 text-yellow-300' },
+  FINISHED:  { label: 'Encerrada',  cls: 'bg-gray-900/80 text-gray-400' },
+  CANCELLED: { label: 'Cancelada',  cls: 'bg-red-900/80 text-red-400' },
+};
 
 function isFull(lobby) {
   const max = lobby.config?.max_players ?? 10;
@@ -92,15 +92,19 @@ export default function LobbyPage() {
           const adm = lobby.config?.adm_nick || '?';
           const totalPlayers = lobby.players.length;
           const maxPlayers = lobby.config?.max_players ?? 10;
-          const cancelled = lobby.status === 'cancelled';
-          const { weekday, date, time } = formatDateTime(lobby.config.data_hora);
+          const waitlistLimit = lobby.config?.waitlist_limit ?? 20;
+          const badge = STATUS_BADGE[lobby.status] || STATUS_BADGE.WAITING;
+          const inactive = lobby.status === 'FINISHED' || lobby.status === 'CANCELLED';
+          const weekday = formatWeekday(lobby.config.data_hora);
+          const date = formatDate(lobby.config.data_hora);
+          const time = formatTime(lobby.config.data_hora);
           const mapImg = MAP_IMAGE[lobby.config.mapa] || `/maps/haven.webp`;
           return (
             <div
               key={lobby.lobby_id}
               onClick={() => navigate(`/match/${lobby.lobby_id}`)}
               className={`bg-valorant-card border border-valorant-border rounded-xl overflow-hidden cursor-pointer transition-all ${
-                cancelled ? 'opacity-50' : 'hover:border-valorant-red/60 active:scale-[0.99]'
+                inactive ? 'opacity-50' : 'hover:border-valorant-red/60 active:scale-[0.99]'
               }`}
             >
               {/* Banner do mapa */}
@@ -113,16 +117,9 @@ export default function LobbyPage() {
                 {/* Gradiente sobre a imagem */}
                 <div className="absolute inset-0 bg-gradient-to-t from-valorant-card via-valorant-card/40 to-transparent" />
                 {/* Badge de status */}
-                <span
-                  className={`absolute top-2 right-2 text-xs font-bold px-2 py-1 rounded-full backdrop-blur-sm ${
-                    cancelled
-                      ? 'bg-gray-900/80 text-gray-400'
-                      : full
-                      ? 'bg-red-900/80 text-red-300'
-                      : 'bg-green-900/80 text-green-300'
-                  }`}
-                >
-                  {cancelled ? 'Cancelada' : full ? 'Lotado' : 'Livre'}
+                <span className={`absolute top-2 right-2 text-xs font-bold px-2 py-1 rounded-full backdrop-blur-sm ${badge.cls}`}>
+                  {badge.label}
+                  {full && lobby.status === 'WAITING' ? ' · Lotado' : ''}
                 </span>
                 {/* Nome do mapa sobre a imagem */}
                 <div className="absolute bottom-2 left-3">
@@ -143,14 +140,19 @@ export default function LobbyPage() {
                       <span>{time}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-gray-400 text-sm">
-                    <Users size={14} />
-                    <span className="font-semibold text-white">{totalPlayers}</span>
-                    <span>/ {maxPlayers}</span>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <div className="flex items-center gap-1.5 text-gray-400 text-sm">
+                      <Users size={14} />
+                      <span>Vagas: <span className="font-semibold text-white">{totalPlayers}</span>/{maxPlayers}</span>
+                    </div>
+                    <span className="text-gray-600 text-xs">Espera: {lobby.waitlist.length}/{waitlistLimit}</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t border-valorant-border/40">
                   <span className="text-gray-500 text-xs">ADM: <span className="text-gray-300">{adm}</span></span>
+                  {lobby.match_count > 0 && (
+                    <span className="text-gray-500 text-xs">Partida #{lobby.match_count + 1}</span>
+                  )}
                   <span className="text-valorant-red text-xs font-bold">Ver →</span>
                 </div>
               </div>

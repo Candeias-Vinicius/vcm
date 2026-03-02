@@ -1,7 +1,5 @@
 const mongoose = require('mongoose');
 
-const MAX_WAITLIST = 10;
-
 const playerSchema = new mongoose.Schema({
   nick: { type: String, required: true },
   is_present: { type: Boolean, default: false },
@@ -17,12 +15,19 @@ const lobbySchema = new mongoose.Schema(
   {
     lobby_id: { type: String, required: true, unique: true },
     adm_user_id: { type: String, required: true },
-    status: { type: String, enum: ['active', 'cancelled'], default: 'active' },
+    status: {
+      type: String,
+      enum: ['WAITING', 'IN_GAME', 'FINISHED', 'CANCELLED'],
+      default: 'WAITING',
+    },
+    match_count: { type: Number, default: 0 },
+    started_at: { type: Date, default: null },
+    expires_at: { type: Date, default: null },
     config: {
       mapa: { type: String, default: 'Haven' },
       data_hora: { type: Date, required: true },
-      total_partidas: { type: Number, default: 3 },
       max_players: { type: Number, default: 10, min: 2, max: 10 },
+      waitlist_limit: { type: Number, default: 20 },
       adm_nick: { type: String, required: true },
       adm_is_player: { type: Boolean, default: true },
     },
@@ -32,6 +37,8 @@ const lobbySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+lobbySchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
+
 lobbySchema.methods.assertAdmin = function (userId) {
   if (this.adm_user_id !== userId) {
     throw new Error('Acesso negado: você não é o ADM desta partida');
@@ -39,7 +46,8 @@ lobbySchema.methods.assertAdmin = function (userId) {
 };
 
 lobbySchema.methods.assertActive = function () {
-  if (this.status === 'cancelled') throw new Error('Esta partida foi cancelada');
+  if (this.status === 'CANCELLED') throw new Error('Esta partida foi cancelada');
+  if (this.status === 'FINISHED') throw new Error('Esta partida já foi encerrada');
 };
 
 lobbySchema.methods.isFull = function () {
@@ -47,7 +55,7 @@ lobbySchema.methods.isFull = function () {
 };
 
 lobbySchema.methods.hasWaitlistRoom = function () {
-  return this.waitlist.length < MAX_WAITLIST;
+  return this.waitlist.length < (this.config.waitlist_limit || 20);
 };
 
 lobbySchema.methods.isAlreadyIn = function (nick) {
@@ -73,6 +81,26 @@ lobbySchema.methods.join = function (nick) {
   }
 };
 
+lobbySchema.methods.leave = function (nick) {
+  const playerIdx = this.players.findIndex(p => p.nick === nick);
+  if (playerIdx !== -1) {
+    if (this.players[playerIdx].is_adm) {
+      throw new Error('O ADM não pode sair da partida. Cancele a partida ou remova-se como jogador.');
+    }
+    this.players.splice(playerIdx, 1);
+    this.promoteFromWaitlist();
+    return;
+  }
+
+  const waitIdx = this.waitlist.findIndex(p => p.nick === nick);
+  if (waitIdx !== -1) {
+    this.waitlist.splice(waitIdx, 1);
+    return;
+  }
+
+  throw new Error('Você não está nesta partida');
+};
+
 lobbySchema.methods.confirmCheckin = function (nick) {
   const player = this.players.find(p => p.nick === nick);
   if (!player) throw new Error('Jogador não encontrado na partida');
@@ -91,6 +119,24 @@ lobbySchema.methods.kick = function (nick) {
   }
 };
 
+lobbySchema.methods.start = function () {
+  if (this.status !== 'WAITING') throw new Error('A partida só pode ser iniciada quando estiver aguardando (WAITING)');
+  this.status = 'IN_GAME';
+  this.started_at = new Date();
+};
+
+lobbySchema.methods.nextMatch = function () {
+  if (this.status !== 'IN_GAME') throw new Error('Só é possível avançar para a próxima partida durante uma em andamento (IN_GAME)');
+  this.match_count += 1;
+  this.status = 'WAITING';
+  this.started_at = null;
+};
+
+lobbySchema.methods.finish = function () {
+  this.status = 'FINISHED';
+  this.expires_at = new Date(Date.now() + 86400000);
+};
+
 lobbySchema.methods.toggleAdmAsPlayer = function () {
   const admIdx = this.players.findIndex(p => p.is_adm);
 
@@ -106,13 +152,17 @@ lobbySchema.methods.toggleAdmAsPlayer = function () {
 };
 
 lobbySchema.methods.cancel = function () {
-  if (this.status === 'cancelled') throw new Error('Partida já está cancelada');
-  this.status = 'cancelled';
+  if (this.status === 'CANCELLED') throw new Error('Partida já está cancelada');
+  this.status = 'CANCELLED';
+  this.expires_at = new Date(Date.now() + 86400000);
 };
 
 lobbySchema.methods.updateConfig = function (updates) {
   if (updates.mapa !== undefined) this.config.mapa = updates.mapa;
-  if (updates.total_partidas !== undefined) this.config.total_partidas = updates.total_partidas;
+  if (updates.waitlist_limit !== undefined) {
+    const wl = Math.max(1, Number(updates.waitlist_limit));
+    this.config.waitlist_limit = wl;
+  }
   if (updates.max_players !== undefined) {
     const v = Math.min(10, Math.max(2, Number(updates.max_players)));
     if (v < this.players.length) {

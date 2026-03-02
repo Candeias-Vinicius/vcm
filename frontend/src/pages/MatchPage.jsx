@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Clock, Users, Shield, XCircle, Share2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Clock, Users, Shield, XCircle, Share2, LogOut, Play } from 'lucide-react';
 import { api } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
+import { formatFull, formatTime } from '../utils/date';
 
 function PlayerCard({ player, isCurrentUser }) {
   return (
@@ -53,6 +54,7 @@ export default function MatchPage() {
   const [lobby, setLobby] = useState(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleUpdate = useCallback((data) => setLobby(data), []);
@@ -89,6 +91,19 @@ export default function MatchPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleLeave() {
+    if (!window.confirm('Sair desta partida?')) return;
+    setLeaving(true);
+    try {
+      const updated = await api.leaveMatch(id);
+      setLobby(updated);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLeaving(false);
+    }
+  }
+
   if (loading) return (
     <div className="min-h-screen bg-valorant-dark flex items-center justify-center text-gray-400">
       Carregando...
@@ -96,12 +111,17 @@ export default function MatchPage() {
   );
   if (!lobby) return null;
 
-  const { config, players, waitlist, status } = lobby;
-  const cancelled = status === 'cancelled';
+  const { config, players, waitlist, status, match_count, started_at } = lobby;
+  const cancelled = status === 'CANCELLED';
+  const finished = status === 'FINISHED';
+  const inactive = cancelled || finished;
   const alreadyIn = isAlreadyIn();
   const maxPlayers = lobby?.config?.max_players ?? 10;
+  const waitlistLimit = lobby?.config?.waitlist_limit ?? 20;
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const isAdm = user && lobby.adm_user_id && user.id === lobby.adm_user_id;
+  const isPlayer = user && [...players, ...waitlist].some(p => p.nick === user.nick);
+  const isAdmPlayer = players.some(p => p.is_adm && p.nick === user?.nick);
 
   return (
     <div className="min-h-screen bg-valorant-dark">
@@ -146,17 +166,32 @@ export default function MatchPage() {
         <div className="absolute bottom-3 left-4">
           <div className="flex items-center gap-2">
             <h2 className="text-white font-bold text-2xl drop-shadow-lg">{config.mapa}</h2>
+            {status === 'IN_GAME' && (
+              <span className="text-xs bg-yellow-900/80 text-yellow-300 border border-yellow-700 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                <Play size={9} fill="currentColor" /> Em jogo
+              </span>
+            )}
             {cancelled && (
               <span className="text-xs bg-red-900/80 text-red-300 border border-red-700 px-2 py-0.5 rounded-full font-semibold">
                 Cancelada
               </span>
             )}
+            {finished && (
+              <span className="text-xs bg-gray-900/80 text-gray-400 border border-gray-700 px-2 py-0.5 rounded-full font-semibold">
+                Encerrada
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 text-gray-300 text-xs mt-0.5">
             <Clock size={11} />
-            {new Date(config.data_hora).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-            <span>· {config.total_partidas} partida(s)</span>
+            {formatFull(config.data_hora)}
+            {match_count > 0 && <span>· Partida #{match_count + 1}</span>}
           </div>
+          {status === 'IN_GAME' && started_at && (
+            <div className="text-yellow-400 text-xs mt-0.5">
+              Iniciada às {formatTime(started_at)}
+            </div>
+          )}
         </div>
       </div>
 
@@ -164,6 +199,26 @@ export default function MatchPage() {
         <div className="mx-4 mt-4 bg-red-900/30 border border-red-800 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
           <XCircle size={16} />
           Esta partida foi cancelada pelo administrador.
+        </div>
+      )}
+
+      {finished && (
+        <div className="mx-4 mt-4 bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 flex items-center gap-2 text-gray-400 text-sm">
+          <XCircle size={16} />
+          Esta partida foi encerrada.
+        </div>
+      )}
+
+      {/* Botão Sair da Sala */}
+      {isPlayer && !inactive && !isAdmPlayer && (
+        <div className="mx-4 mt-4">
+          <button
+            onClick={handleLeave}
+            disabled={leaving}
+            className="w-full flex items-center justify-center gap-2 border border-red-800 hover:bg-red-900/30 text-red-400 font-bold py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+          >
+            <LogOut size={15} /> Sair da Sala
+          </button>
         </div>
       )}
 
@@ -179,7 +234,7 @@ export default function MatchPage() {
             ) : (
               <EmptySlot
                 key={i}
-                disabled={alreadyIn || cancelled}
+                disabled={alreadyIn || inactive}
                 onClick={handleJoin}
               />
             )
@@ -191,7 +246,7 @@ export default function MatchPage() {
       {(waitlist.length > 0 || players.length >= maxPlayers) && (
         <div className="px-4 py-2">
           <h3 className="flex items-center gap-2 text-gray-400 text-sm font-bold uppercase tracking-wider mb-3">
-            <Users size={14} /> Lista de Espera ({waitlist.length}/10)
+            <Users size={14} /> Lista de Espera ({waitlist.length}/{waitlistLimit})
           </h3>
           {waitlist.length === 0 ? (
             <p className="text-gray-600 text-sm text-center py-2">Lista de espera vazia.</p>
@@ -211,7 +266,7 @@ export default function MatchPage() {
               ))}
 
               {/* Slot de entrar na espera */}
-              {!alreadyIn && !cancelled && waitlist.length < 10 && (
+              {!alreadyIn && !inactive && waitlist.length < waitlistLimit && (
                 <button
                   onClick={handleJoin}
                   disabled={joining}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, CheckCircle, Edit2, Save, X, Users, XCircle, UserPlus, UserMinus,
+  ArrowLeft, CheckCircle, Edit2, Save, X, Users, XCircle, UserPlus, UserMinus, Play, SkipForward,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
@@ -31,7 +31,7 @@ export default function AdminPage() {
     setLobby(data);
     setEditForm(f => ({
       mapa: data.config.mapa,
-      total_partidas: data.config.total_partidas,
+      waitlist_limit: data.config.waitlist_limit ?? 20,
       max_players: data.config.max_players ?? 10,
     }));
   }, []);
@@ -41,7 +41,7 @@ export default function AdminPage() {
     api.getLobby(id)
       .then((data) => {
         setLobby(data);
-        setEditForm({ mapa: data.config.mapa, total_partidas: data.config.total_partidas, max_players: data.config.max_players ?? 10 });
+        setEditForm({ mapa: data.config.mapa, waitlist_limit: data.config.waitlist_limit ?? 20, max_players: data.config.max_players ?? 10 });
       })
       .catch(() => navigate('/'))
       .finally(() => setLoading(false));
@@ -85,6 +85,16 @@ export default function AdminPage() {
     });
   };
 
+  const handleStart = () => run(async () => {
+    const updated = await api.startMatch(id);
+    setLobby(updated);
+  });
+
+  const handleNext = () => run(async () => {
+    const updated = await api.nextMatch(id);
+    setLobby(updated);
+  });
+
   const handleSaveConfig = () => run(async () => {
     const updated = await api.updateConfig(id, editForm);
     setLobby(updated);
@@ -98,8 +108,10 @@ export default function AdminPage() {
   );
   if (!lobby) return null;
 
-  const { config, players, waitlist, status } = lobby;
-  const cancelled = status === 'cancelled';
+  const { config, players, waitlist, status, match_count } = lobby;
+  const cancelled = status === 'CANCELLED';
+  const finished = status === 'FINISHED';
+  const inactive = cancelled || finished;
   const admIsPlayer = players.some(p => p.is_adm);
 
   return (
@@ -120,7 +132,7 @@ export default function AdminPage() {
           <ArrowLeft size={18} />
         </button>
         {/* Botão editar */}
-        {!cancelled && (
+        {!inactive && (
           <button
             onClick={() => setEditing(e => !e)}
             className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white rounded-full p-1.5 hover:bg-black/70"
@@ -139,8 +151,20 @@ export default function AdminPage() {
                   Cancelada
                 </span>
               )}
+              {finished && (
+                <span className="text-xs bg-gray-900/80 text-gray-400 border border-gray-700 px-2 py-0.5 rounded-full">
+                  Encerrada
+                </span>
+              )}
+              {status === 'IN_GAME' && (
+                <span className="text-xs bg-yellow-900/80 text-yellow-300 border border-yellow-700 px-2 py-0.5 rounded-full">
+                  Em jogo
+                </span>
+              )}
             </div>
-            <div className="text-gray-300 text-xs mt-0.5">{config.total_partidas} partida(s)</div>
+            <div className="text-gray-300 text-xs mt-0.5">
+              {match_count > 0 ? `Partida #${match_count + 1}` : 'Aguardando início'}
+            </div>
           </div>
         </div>
       </div>
@@ -151,9 +175,14 @@ export default function AdminPage() {
           <XCircle size={16} /> Esta partida foi cancelada.
         </div>
       )}
+      {finished && (
+        <div className="mx-4 mt-4 bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 flex items-center gap-2 text-gray-400 text-sm">
+          <XCircle size={16} /> Esta partida foi encerrada.
+        </div>
+      )}
 
       {/* Config editor */}
-      {editing && !cancelled && (
+      {editing && !inactive && (
         <div className="mx-4 mt-4 bg-valorant-card border border-valorant-border rounded-xl p-4 flex flex-col gap-3">
           <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider">Editar Config</h3>
           <div>
@@ -167,15 +196,6 @@ export default function AdminPage() {
             </select>
           </div>
           <div>
-            <label className="text-gray-500 text-xs mb-1 block">Total de Partidas</label>
-            <input
-              type="number" min={1} max={10}
-              value={editForm.total_partidas}
-              onChange={e => setEditForm(f => ({ ...f, total_partidas: Number(e.target.value) }))}
-              className="w-full bg-valorant-dark border border-valorant-border text-white px-3 py-2 rounded-lg text-sm"
-            />
-          </div>
-          <div>
             <label className="text-gray-500 text-xs mb-1 block">Vagas (máx. jogadores)</label>
             <input
               type="number" min={2} max={10}
@@ -184,7 +204,17 @@ export default function AdminPage() {
               className="w-full bg-valorant-dark border border-valorant-border text-white px-3 py-2 rounded-lg text-sm"
             />
           </div>
+          <div>
+            <label className="text-gray-500 text-xs mb-1 block">Limite da Lista de Espera</label>
+            <input
+              type="number" min={1} max={50}
+              value={editForm.waitlist_limit ?? 20}
+              onChange={e => setEditForm(f => ({ ...f, waitlist_limit: Number(e.target.value) }))}
+              className="w-full bg-valorant-dark border border-valorant-border text-white px-3 py-2 rounded-lg text-sm"
+            />
+          </div>
           <button
+            onClick={handleSaveConfig}
             disabled={busy}
             className="flex items-center justify-center gap-2 bg-valorant-red text-white font-bold py-2 rounded-lg text-sm"
           >
@@ -194,8 +224,28 @@ export default function AdminPage() {
       )}
 
       {/* Ações do ADM */}
-      {!cancelled && (
+      {!inactive && (
         <div className="mx-4 mt-4 flex flex-col gap-2">
+          {/* Iniciar / Próxima Partida */}
+          {status === 'WAITING' && (
+            <button
+              onClick={handleStart}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+            >
+              <Play size={16} /> Iniciar Partida
+            </button>
+          )}
+          {status === 'IN_GAME' && (
+            <button
+              onClick={handleNext}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 bg-yellow-800 hover:bg-yellow-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+            >
+              <SkipForward size={16} /> Próxima Partida
+            </button>
+          )}
+
           {/* ADM toggle jogador (entrar/sair) */}
           {admIsPlayer ? (
             <button
@@ -231,7 +281,7 @@ export default function AdminPage() {
       {/* Lista de jogadores */}
       <div className="mx-4 mt-4">
         <h3 className="flex items-center gap-2 text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">
-          <Users size={14} /> Jogadores ({players.length}/{config?.max_players ?? 10})
+          <Users size={14} /> Jogadores ({players.length}/{config?.max_players ?? 10}) · Espera ({waitlist.length}/{config?.waitlist_limit ?? 20})
         </h3>
         <div className="flex flex-col gap-2">
           {players.map(p => (
@@ -244,7 +294,7 @@ export default function AdminPage() {
                 {p.is_present ? (
                   <CheckCircle size={16} className="text-green-400" />
                 ) : (
-                  !cancelled && (
+                  !inactive && (
                     <button
                       onClick={() => handleCheckin(p.nick)}
                       disabled={busy}
@@ -254,7 +304,7 @@ export default function AdminPage() {
                     </button>
                   )
                 )}
-                {!cancelled && !p.is_adm && (
+                {!inactive && !p.is_adm && (
                   <button
                     onClick={() => handleKick(p.nick)}
                     disabled={busy}
