@@ -511,4 +511,39 @@ router.delete('/:id/leave', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /lobbies/{id}/join:
+ *   put:
+ *     tags: [Lobbies]
+ *     summary: Alternar posição (titulares ↔ lista de espera)
+ *     description: Se o usuário está nos titulares, move para o fim da lista de espera (promovendo o primeiro da fila). Se está na lista de espera e há vaga, move para os titulares.
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lobby atualizado após alternância
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Sem permissão, sem vagas ou lista de espera cheia
+ */
+router.put('/:id/join', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.togglePosition(req.params.id, req.user.nick);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -95,6 +95,13 @@ async function leaveLobby(lobby_id, nick) {
   return lobbyRepo.save(lobby);
 }
 
+async function togglePosition(lobby_id, nick) {
+  const lobby = await lobbyRepo.findById(lobby_id);
+  assertLobbyExists(lobby);
+  lobby.togglePosition(nick);
+  return lobbyRepo.save(lobby);
+}
+
 function getLobbies() {
   return lobbyRepo.findAll();
 }
@@ -114,6 +121,7 @@ module.exports = {
   startMatch,
   nextMatch,
   leaveLobby,
+  togglePosition,
   getLobbies,
   getLobbyById,
 };

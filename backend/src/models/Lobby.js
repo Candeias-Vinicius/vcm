@@ -81,6 +81,32 @@ lobbySchema.methods.join = function (nick) {
   }
 };
 
+lobbySchema.methods.togglePosition = function (nick) {
+  this.assertActive();
+
+  const playerIdx = this.players.findIndex(p => p.nick === nick);
+  if (playerIdx !== -1) {
+    if (this.players[playerIdx].is_adm) {
+      throw new Error('O ADM não pode migrar para a lista de espera.');
+    }
+    if (!this.hasWaitlistRoom()) throw new Error('Lista de espera está cheia.');
+    this.players.splice(playerIdx, 1);
+    this.promoteFromWaitlist();
+    this.waitlist.push({ nick, joined_at: new Date() });
+    return;
+  }
+
+  const waitIdx = this.waitlist.findIndex(p => p.nick === nick);
+  if (waitIdx !== -1) {
+    if (this.isFull()) throw new Error('Sem vagas disponíveis nos titulares.');
+    this.waitlist.splice(waitIdx, 1);
+    this.players.push({ nick, is_present: false, is_adm: false });
+    return;
+  }
+
+  throw new Error('Você não está nesta partida.');
+};
+
 lobbySchema.methods.leave = function (nick) {
   const playerIdx = this.players.findIndex(p => p.nick === nick);
   if (playerIdx !== -1) {
