@@ -55,6 +55,7 @@ export default function MatchPage() {
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleUpdate = useCallback((data) => setLobby(data), []);
@@ -104,6 +105,18 @@ export default function MatchPage() {
     }
   }
 
+  async function handleTogglePosition() {
+    setToggling(true);
+    try {
+      const updated = await api.togglePosition(id);
+      setLobby(updated);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setToggling(false);
+    }
+  }
+
   if (loading) return (
     <div className="min-h-screen bg-valorant-dark flex items-center justify-center text-gray-400">
       Carregando...
@@ -122,6 +135,9 @@ export default function MatchPage() {
   const isAdm = user && lobby.adm_user_id && user.id === lobby.adm_user_id;
   const isPlayer = user && [...players, ...waitlist].some(p => p.nick === user.nick);
   const isAdmPlayer = players.some(p => p.is_adm && p.nick === user?.nick);
+  const isInPlayers = players.some(p => p.nick === user?.nick && !p.is_adm);
+  const isInWaitlist = waitlist.some(p => p.nick === user?.nick);
+  const hasOpenSlot = players.length < maxPlayers;
 
   return (
     <div className="min-h-screen bg-valorant-dark">
@@ -209,9 +225,27 @@ export default function MatchPage() {
         </div>
       )}
 
-      {/* Botão Sair da Sala */}
+      {/* Botão toggle posição + Sair da Sala */}
       {isPlayer && !inactive && !isAdmPlayer && (
-        <div className="mx-4 mt-4">
+        <div className="mx-4 mt-4 flex flex-col gap-2">
+          {isInWaitlist && hasOpenSlot && (
+            <button
+              onClick={handleTogglePosition}
+              disabled={toggling}
+              className="w-full flex items-center justify-center gap-2 bg-blue-800 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+            >
+              ↑ Entrar como Titular
+            </button>
+          )}
+          {isInPlayers && (
+            <button
+              onClick={handleTogglePosition}
+              disabled={toggling}
+              className="w-full flex items-center justify-center gap-2 border border-blue-700 hover:bg-blue-900/30 text-blue-400 font-bold py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+            >
+              ↓ Ir para Lista de Espera
+            </button>
+          )}
           <button
             onClick={handleLeave}
             disabled={leaving}

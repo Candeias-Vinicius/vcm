@@ -151,6 +151,15 @@ export const api = {
     request(`${BASE}/${id}/next`, { method: 'POST' }),
 
   /**
+   * Alternar posição entre titulares e lista de espera.
+   * Titulares → fim da fila (promove primeiro da waitlist). Waitlist → titulares (se houver vaga).
+   * @param {string} id - lobby_id
+   * @returns {Lobby}
+   */
+  togglePosition: (id) =>
+    request(`${BASE}/${id}/join`, { method: 'PUT' }),
+
+  /**
    * Sair da partida voluntariamente. Remove o usuário de players ou waitlist.
    * @param {string} id - lobby_id
    * @returns {Lobby}
