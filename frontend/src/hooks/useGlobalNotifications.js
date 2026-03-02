@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { showNativeNotification } from '../utils/notifications';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || '';
 
@@ -17,8 +18,15 @@ export function useGlobalNotifications(onAlert, onDelayed) {
     const socket = getGlobalSocket();
     if (!socket.connected) socket.connect();
 
-    const handleAlert = (data) => onAlert?.(data);
-    const handleDelayed = (data) => onDelayed?.(data);
+    const handleAlert = (data) => {
+      showNativeNotification('⏰ Partida em 10 minutos!', data.message);
+      onAlert?.(data);
+    };
+
+    const handleDelayed = (data) => {
+      showNativeNotification('⚠️ Partida atrasada', data.message);
+      onDelayed?.(data);
+    };
 
     socket.on('lobby_alert', handleAlert);
     socket.on('lobby_delayed', handleDelayed);
