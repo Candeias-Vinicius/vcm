@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LobbyPage from './pages/LobbyPage';
 import MatchPage from './pages/MatchPage';
-import AdminPage from './pages/AdminPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -44,7 +43,6 @@ function AppRoutes() {
       {/* Rotas protegidas (requer login) */}
       <Route path="/" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} />
       <Route path="/match/:id" element={<ProtectedRoute><MatchPage /></ProtectedRoute>} />
-      <Route path="/admin/:id" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

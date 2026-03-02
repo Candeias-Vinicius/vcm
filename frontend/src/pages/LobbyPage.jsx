@@ -42,7 +42,7 @@ export default function LobbyPage() {
     try {
       const { lobby_id } = await api.createLobby(payload);
       setShowCreate(false);
-      navigate(`/admin/${lobby_id}`);
+      navigate(`/match/${lobby_id}`);
     } catch (err) {
       alert(err.message);
     }
