@@ -336,8 +336,27 @@ export default function MatchPage() {
       )}
 
       {/* Controles de posição — todos os participantes (inclusive ADM) */}
-      {isParticipant && !inactive && (
+      {(isParticipant || isAdm) && !inactive && (
         <div className="mx-4 mt-4 flex flex-col gap-2">
+          {/* ADM observador pode entrar como jogador */}
+          {isAdm && !isParticipant && hasOpenSlot && (
+            <button
+              onClick={handleJoin}
+              disabled={joining}
+              className="w-full flex items-center justify-center gap-2 bg-blue-800 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+            >
+              ↑ Entrar como Titular
+            </button>
+          )}
+          {isAdm && !isParticipant && !hasOpenSlot && waitlist.length < waitlistLimit && (
+            <button
+              onClick={handleJoin}
+              disabled={joining}
+              className="w-full flex items-center justify-center gap-2 border border-blue-700 hover:bg-blue-900/30 text-blue-400 font-bold py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+            >
+              + Entrar na Fila de Espera
+            </button>
+          )}
           {isInWaitlist && hasOpenSlot && (
             <button
               onClick={handleTogglePosition}

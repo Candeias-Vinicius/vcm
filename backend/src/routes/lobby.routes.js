@@ -503,7 +503,7 @@ router.post('/:id/next', requireAuth, async (req, res) => {
  */
 router.delete('/:id/leave', requireAuth, async (req, res) => {
   try {
-    const lobby = await service.leaveLobby(req.params.id, req.user.nick);
+    const lobby = await service.leaveLobby(req.params.id, req.user.nick, req.user.id);
     req.io.to(req.params.id).emit('lobby_updated', lobby);
     res.json(lobby);
   } catch (err) {

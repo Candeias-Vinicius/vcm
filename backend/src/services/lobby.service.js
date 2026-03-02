@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const lobbyRepo = require('../repositories/lobby.repository');
+const userRepo = require('../repositories/user.repository');
 
 function assertLobbyExists(lobby) {
   if (!lobby) throw new Error('Lobby não encontrado');
@@ -87,11 +88,29 @@ async function nextMatch(lobby_id, userId) {
   return lobbyRepo.save(lobby);
 }
 
-async function leaveLobby(lobby_id, nick) {
+async function leaveLobby(lobby_id, nick, userId) {
   const lobby = await lobbyRepo.findById(lobby_id);
   assertLobbyExists(lobby);
   lobby.assertActive();
-  lobby.leave(nick);
+
+  if (lobby.adm_user_id === userId) {
+    // ADM is leaving — transfer role to next person or auto-cancel
+    const transferNick = lobby.admLeave();
+    if (transferNick) {
+      const newAdm = await userRepo.findByNick(transferNick);
+      if (newAdm) {
+        lobby.adm_user_id = newAdm._id.toString();
+        lobby.config.adm_nick = transferNick;
+        // Ensure is_adm flag is set on the new ADM if they're in players
+        const playerEntry = lobby.players.find(p => p.nick === transferNick);
+        if (playerEntry) playerEntry.is_adm = true;
+      }
+    }
+    // If transferNick is null, lobby.cancel() was already called inside admLeave()
+  } else {
+    lobby.leave(nick);
+  }
+
   return lobbyRepo.save(lobby);
 }
 
