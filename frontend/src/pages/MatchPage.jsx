@@ -1,25 +1,54 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Clock, Users, Shield, XCircle, Share2, LogOut, Play } from 'lucide-react';
+import {
+  ArrowLeft, CheckCircle, Clock, Users, Shield, XCircle, Share2, LogOut,
+  Play, Edit2, SkipForward,
+} from 'lucide-react';
 import { api } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
 import { formatFull, formatTime } from '../utils/date';
+import EditConfigModal from '../components/EditConfigModal';
 
-function PlayerCard({ player, isCurrentUser }) {
+function PlayerCard({ player, isCurrentUser, isAdm, onCheckin, onKick, busy, inactive }) {
   return (
     <div
-      className={`rounded-lg px-3 py-2.5 flex items-center gap-3 ${
+      className={`rounded-lg px-3 py-2.5 flex items-center gap-2 ${
         isCurrentUser
           ? 'bg-valorant-red/20 border border-valorant-red'
           : 'bg-valorant-card border border-valorant-border'
       }`}
     >
-      <span className="text-white text-sm font-semibold flex-1 flex items-center gap-1.5 truncate">
+      <span className="text-white text-sm font-semibold flex-1 flex items-center gap-1.5 truncate min-w-0">
         {player.is_adm && <Shield size={12} className="text-valorant-red flex-shrink-0" />}
-        {player.nick}
+        <span className="truncate">{player.nick}</span>
       </span>
-      {player.is_present && <CheckCircle size={15} className="text-green-400 flex-shrink-0" />}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {player.is_present ? (
+          <CheckCircle size={15} className="text-green-400" />
+        ) : (
+          isAdm && !inactive && (
+            <button
+              onClick={() => onCheckin(player.nick)}
+              disabled={busy}
+              title="Confirmar presença"
+              className="text-xs bg-green-900 hover:bg-green-800 text-green-300 px-2 py-0.5 rounded"
+            >
+              ✓
+            </button>
+          )
+        )}
+        {isAdm && !inactive && !player.is_adm && (
+          <button
+            onClick={() => onKick(player.nick)}
+            disabled={busy}
+            title="Remover jogador"
+            className="text-xs bg-red-900/50 hover:bg-red-900 text-red-400 px-1.5 py-0.5 rounded"
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -57,6 +86,8 @@ export default function MatchPage() {
   const [leaving, setLeaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const handleUpdate = useCallback((data) => setLobby(data), []);
   useSocket(id, handleUpdate);
@@ -117,6 +148,55 @@ export default function MatchPage() {
     }
   }
 
+  async function run(fn) {
+    setBusy(true);
+    try { await fn(); } catch (err) { alert(err.message); } finally { setBusy(false); }
+  }
+
+  const handleCheckin = (nick) => run(async () => {
+    const updated = await api.confirmCheckin(id, nick);
+    setLobby(updated);
+  });
+
+  const handleKick = (nick) => {
+    if (!window.confirm(`Remover ${nick} da partida?`)) return;
+    run(async () => {
+      const updated = await api.kickPlayer(id, nick);
+      setLobby(updated);
+    });
+  };
+
+  const handleStart = () => run(async () => {
+    const updated = await api.startMatch(id);
+    setLobby(updated);
+  });
+
+  const handleNext = () => run(async () => {
+    const updated = await api.nextMatch(id);
+    setLobby(updated);
+  });
+
+  const handleCancel = () => {
+    if (!window.confirm('Cancelar esta partida? Ela ainda ficará visível por 24h.')) return;
+    run(async () => {
+      const updated = await api.cancelLobby(id);
+      setLobby(updated);
+    });
+  };
+
+  const handleSaveConfig = async (form) => {
+    setBusy(true);
+    try {
+      const updated = await api.updateConfig(id, form);
+      setLobby(updated);
+      setEditing(false);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen bg-valorant-dark flex items-center justify-center text-gray-400">
       Carregando...
@@ -129,18 +209,17 @@ export default function MatchPage() {
   const finished = status === 'FINISHED';
   const inactive = cancelled || finished;
   const alreadyIn = isAlreadyIn();
-  const maxPlayers = lobby?.config?.max_players ?? 10;
-  const waitlistLimit = lobby?.config?.waitlist_limit ?? 20;
+  const maxPlayers = config?.max_players ?? 10;
+  const waitlistLimit = config?.waitlist_limit ?? 20;
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
   const isAdm = user && lobby.adm_user_id && user.id === lobby.adm_user_id;
-  const isPlayer = user && [...players, ...waitlist].some(p => p.nick === user.nick);
-  const isAdmPlayer = players.some(p => p.is_adm && p.nick === user?.nick);
-  const isInPlayers = players.some(p => p.nick === user?.nick && !p.is_adm);
+  const isInPlayers = players.some(p => p.nick === user?.nick);
   const isInWaitlist = waitlist.some(p => p.nick === user?.nick);
+  const isParticipant = isInPlayers || isInWaitlist;
   const hasOpenSlot = players.length < maxPlayers;
 
   return (
-    <div className="min-h-screen bg-valorant-dark">
+    <div className="min-h-screen bg-valorant-dark pb-8">
       {/* Banner do mapa */}
       <div className="relative h-36 w-full">
         <img
@@ -149,39 +228,41 @@ export default function MatchPage() {
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-valorant-dark via-valorant-dark/50 to-black/30" />
-        {/* Botão voltar */}
+
         <button
           onClick={() => navigate('/')}
           className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white rounded-full p-1.5 hover:bg-black/70"
         >
           <ArrowLeft size={18} />
         </button>
-        {/* Botões do canto direito */}
+
         <div className="absolute top-3 right-3 flex items-center gap-2">
+          {isAdm && !inactive && (
+            <button
+              onClick={() => setEditing(true)}
+              title="Editar sala"
+              className="bg-black/50 backdrop-blur-sm text-white rounded-full p-1.5 hover:bg-black/70"
+            >
+              <Edit2 size={16} />
+            </button>
+          )}
           <button
             onClick={handleShare}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-all ${
-              copied
-                ? 'bg-green-600 text-white'
-                : 'bg-black/50 backdrop-blur-sm text-white hover:bg-black/70'
+              copied ? 'bg-green-600 text-white' : 'bg-black/50 backdrop-blur-sm text-white hover:bg-black/70'
             }`}
           >
             <Share2 size={13} />
             {copied ? 'Copiado!' : 'Compartilhar'}
           </button>
-          {isAdm && (
-            <button
-              onClick={() => navigate(`/admin/${id}`)}
-              className="bg-valorant-red text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow"
-            >
-              ADM
-            </button>
-          )}
         </div>
-        {/* Info do mapa */}
+
         <div className="absolute bottom-3 left-4">
           <div className="flex items-center gap-2">
             <h2 className="text-white font-bold text-2xl drop-shadow-lg">{config.mapa}</h2>
+            {isAdm && (
+              <span className="text-xs bg-valorant-red/80 text-white px-2 py-0.5 rounded-full font-bold">ADM</span>
+            )}
             {status === 'IN_GAME' && (
               <span className="text-xs bg-yellow-900/80 text-yellow-300 border border-yellow-700 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                 <Play size={9} fill="currentColor" /> Em jogo
@@ -211,22 +292,51 @@ export default function MatchPage() {
         </div>
       </div>
 
+      {/* Banners de status */}
       {cancelled && (
         <div className="mx-4 mt-4 bg-red-900/30 border border-red-800 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
-          <XCircle size={16} />
-          Esta partida foi cancelada pelo administrador.
+          <XCircle size={16} /> Esta partida foi cancelada pelo administrador.
         </div>
       )}
-
       {finished && (
         <div className="mx-4 mt-4 bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 flex items-center gap-2 text-gray-400 text-sm">
-          <XCircle size={16} />
-          Esta partida foi encerrada.
+          <XCircle size={16} /> Esta partida foi encerrada.
         </div>
       )}
 
-      {/* Botão toggle posição + Sair da Sala */}
-      {isPlayer && !inactive && !isAdmPlayer && (
+      {/* Controles do ADM */}
+      {isAdm && !inactive && (
+        <div className="mx-4 mt-4 flex flex-col gap-2">
+          {status === 'WAITING' && (
+            <button
+              onClick={handleStart}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+            >
+              <Play size={16} /> Iniciar Partida
+            </button>
+          )}
+          {status === 'IN_GAME' && (
+            <button
+              onClick={handleNext}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 bg-yellow-800 hover:bg-yellow-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+            >
+              <SkipForward size={16} /> Próxima Partida
+            </button>
+          )}
+          <button
+            onClick={handleCancel}
+            disabled={busy}
+            className="flex items-center justify-center gap-2 border border-red-800 hover:bg-red-900/30 text-red-400 font-bold py-3 rounded-xl text-sm transition-colors"
+          >
+            <XCircle size={16} /> Cancelar Partida
+          </button>
+        </div>
+      )}
+
+      {/* Controles de posição — todos os participantes (inclusive ADM) */}
+      {isParticipant && !inactive && (
         <div className="mx-4 mt-4 flex flex-col gap-2">
           {isInWaitlist && hasOpenSlot && (
             <button
@@ -256,15 +366,24 @@ export default function MatchPage() {
         </div>
       )}
 
-      {/* Players */}
+      {/* Grade de jogadores */}
       <div className="px-4 py-4">
         <h3 className="flex items-center gap-2 text-gray-400 text-sm font-bold uppercase tracking-wider mb-3">
-          <Users size={14} /> Jogadores ({players.length}/{maxPlayers})
+          <Users size={14} /> Jogadores ({players.length}/{maxPlayers}) · Espera ({waitlist.length}/{waitlistLimit})
         </h3>
         <div className="grid grid-cols-2 gap-2">
           {slots.map((p, i) =>
             p ? (
-              <PlayerCard key={i} player={p} isCurrentUser={p.nick === user?.nick} />
+              <PlayerCard
+                key={i}
+                player={p}
+                isCurrentUser={p.nick === user?.nick}
+                isAdm={isAdm}
+                onCheckin={handleCheckin}
+                onKick={handleKick}
+                busy={busy}
+                inactive={inactive}
+              />
             ) : (
               <EmptySlot
                 key={i}
@@ -276,7 +395,7 @@ export default function MatchPage() {
         </div>
       </div>
 
-      {/* Waitlist */}
+      {/* Lista de espera */}
       {(waitlist.length > 0 || players.length >= maxPlayers) && (
         <div className="px-4 py-2">
           <h3 className="flex items-center gap-2 text-gray-400 text-sm font-bold uppercase tracking-wider mb-3">
@@ -298,8 +417,6 @@ export default function MatchPage() {
                   {p.nick === user?.nick && <CheckCircle size={14} className="text-valorant-red" />}
                 </div>
               ))}
-
-              {/* Slot de entrar na espera */}
               {!alreadyIn && !inactive && waitlist.length < waitlistLimit && (
                 <button
                   onClick={handleJoin}
@@ -312,6 +429,17 @@ export default function MatchPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Modal de edição de config (ADM) */}
+      {isAdm && (
+        <EditConfigModal
+          isOpen={editing}
+          onClose={() => setEditing(false)}
+          config={config}
+          onSave={handleSaveConfig}
+          busy={busy}
+        />
       )}
     </div>
   );
