@@ -95,14 +95,14 @@ router.get('/:id', async (req, res) => {
  *               data_hora:
  *                 type: string
  *                 format: date-time
- *               total_partidas:
- *                 type: integer
- *                 example: 3
  *               max_players:
  *                 type: integer
  *                 minimum: 2
  *                 maximum: 10
  *                 default: 10
+ *               waitlist_limit:
+ *                 type: integer
+ *                 default: 20
  *               adm_is_player:
  *                 type: boolean
  *                 default: true
@@ -122,10 +122,10 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', requireAuth, async (req, res) => {
   try {
-    const { mapa, data_hora, total_partidas, max_players, adm_is_player } = req.body;
+    const { mapa, data_hora, max_players, waitlist_limit, adm_is_player } = req.body;
     if (!data_hora) return res.status(400).json({ error: 'data_hora é obrigatório' });
     const lobby = await service.createLobby({
-      mapa, data_hora, total_partidas, max_players, adm_is_player,
+      mapa, data_hora, max_players, waitlist_limit, adm_is_player,
       adm_nick: req.user.nick,
       adm_user_id: req.user.id,
     });
@@ -376,7 +376,7 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
  *             properties:
  *               mapa:
  *                 type: string
- *               total_partidas:
+ *               waitlist_limit:
  *                 type: integer
  *               max_players:
  *                 type: integer
@@ -399,6 +399,111 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const lobby = await service.updateConfig(req.params.id, req.body, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/start:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Iniciar partida (ADM)
+ *     description: Muda status para IN_GAME e registra startedAt. Só disponível quando status é WAITING.
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Partida iniciada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Sem permissão ou status inválido
+ */
+router.post('/:id/start', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.startMatch(req.params.id, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/next:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Avançar para próxima partida (ADM)
+ *     description: Incrementa matchCount, volta status para WAITING. Só disponível quando status é IN_GAME.
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Avançado para próxima partida
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Sem permissão ou status inválido
+ */
+router.post('/:id/next', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.nextMatch(req.params.id, req.user.id);
+    req.io.to(req.params.id).emit('lobby_updated', lobby);
+    res.json(lobby);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/leave:
+ *   delete:
+ *     tags: [Lobbies]
+ *     summary: Sair da partida voluntariamente
+ *     description: Remove o usuário autenticado dos jogadores ou da lista de espera. Se era jogador, promove o primeiro da waitlist.
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lobby atualizado após saída
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Lobby'
+ *       400:
+ *         description: Não está na partida, partida encerrada ou ADM não pode sair
+ */
+router.delete('/:id/leave', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.leaveLobby(req.params.id, req.user.nick);
     req.io.to(req.params.id).emit('lobby_updated', lobby);
     res.json(lobby);
   } catch (err) {

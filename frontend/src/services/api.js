@@ -128,9 +128,33 @@ export const api = {
   /**
    * Editar configurações da partida (somente ADM).
    * @param {string} id - lobby_id
-   * @param {{ mapa?, total_partidas?, max_players? }} updates
+   * @param {{ mapa?, waitlist_limit?, max_players? }} updates
    * @returns {Lobby}
    */
   updateConfig: (id, updates) =>
     request(`${BASE}/${id}`, { method: 'PATCH', body: updates }),
+
+  /**
+   * Iniciar partida (somente ADM). Status: WAITING → IN_GAME.
+   * @param {string} id - lobby_id
+   * @returns {Lobby}
+   */
+  startMatch: (id) =>
+    request(`${BASE}/${id}/start`, { method: 'POST' }),
+
+  /**
+   * Avançar para próxima partida (somente ADM). Status: IN_GAME → WAITING.
+   * @param {string} id - lobby_id
+   * @returns {Lobby}
+   */
+  nextMatch: (id) =>
+    request(`${BASE}/${id}/next`, { method: 'POST' }),
+
+  /**
+   * Sair da partida voluntariamente. Remove o usuário de players ou waitlist.
+   * @param {string} id - lobby_id
+   * @returns {Lobby}
+   */
+  leaveMatch: (id) =>
+    request(`${BASE}/${id}/leave`, { method: 'DELETE' }),
 };
