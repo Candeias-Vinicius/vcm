@@ -21,8 +21,8 @@ function findDuplicate(email, nick) {
   return User.findOne({ $or: [{ email: email.toLowerCase() }, { nick }] });
 }
 
-function findOne(query) {
-  return User.findOne(query);
+function findByPendingEmail(email) {
+  return User.findOne({ pending_email: email.toLowerCase().trim() });
 }
 
 function create({ nick, email, password_hash }) {
@@ -39,7 +39,7 @@ module.exports = {
   findByNick,
   findByLoginInput,
   findDuplicate,
-  findOne,
+  findByPendingEmail,
   create,
   save,
 };
