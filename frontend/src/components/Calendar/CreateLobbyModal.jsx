@@ -9,7 +9,7 @@ function nextFullHour() {
   return now.toISOString();
 }
 
-export default function CreateLobbyModal({ maps, onClose, onCreate }) {
+export default function CreateLobbyModal({ maps, onClose, onCreate, isTutorial, errorMsg }) {
   const [form, setForm] = useState({
     mapa: maps[0],
     data_hora: nextFullHour(),
@@ -17,6 +17,7 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
     max_players: 10,
     waitlist_limit: 20,
   });
+  const [validationError, setValidationError] = useState('');
 
   function update(key, value) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -24,9 +25,12 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!form.data_hora) return alert('Selecione a data e hora');
+    if (!form.data_hora) { setValidationError('Selecione a data e hora'); return; }
+    setValidationError('');
     onCreate(form);
   }
+
+  const displayError = validationError || errorMsg;
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-end justify-center z-50">
@@ -94,6 +98,10 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
               Quero jogar como um dos 10 titulares
             </label>
           </div>
+
+          {displayError && (
+            <p className="text-red-400 text-sm bg-red-900/30 border border-red-800 rounded-lg px-3 py-2">{displayError}</p>
+          )}
 
           <button
             id="tutorial-modal-submit"

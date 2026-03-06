@@ -32,6 +32,7 @@ export default function LobbyPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [createError, setCreateError] = useState('');
   const navigate = useNavigate();
 
   // Check first access (per user account)
@@ -48,9 +49,18 @@ export default function LobbyPage() {
     if (tutorialActive) setShowCreate(modalOpen);
   }, [tutorialActive, modalOpen]);
 
+  const STATUS_ORDER = { IN_GAME: 0, WAITING: 1, FINISHED: 2, CANCELLED: 3 };
+
   useEffect(() => {
     api.getLobbies()
-      .then(setLobbies)
+      .then(data => {
+        const sorted = [...data].sort((a, b) => {
+          const statusDiff = (STATUS_ORDER[a.status] ?? 1) - (STATUS_ORDER[b.status] ?? 1);
+          if (statusDiff !== 0) return statusDiff;
+          return new Date(b.config.data_hora) - new Date(a.config.data_hora);
+        });
+        setLobbies(sorted);
+      })
       .catch(() => setLobbies([]))
       .finally(() => setLoading(false));
   }, []);
@@ -68,7 +78,7 @@ export default function LobbyPage() {
       setShowCreate(false);
       navigate(`/match/${lobby_id}`);
     } catch (err) {
-      alert(err.message);
+      setCreateError(err.message);
     }
   }
 
@@ -218,7 +228,7 @@ export default function LobbyPage() {
       </div>
 
       {showCreate && (
-        <CreateLobbyModal maps={MAPS} onClose={() => { setShowCreate(false); if (tutorialActive) setModalOpen(false); }} onCreate={handleCreate} isTutorial={tutorialActive} />
+        <CreateLobbyModal maps={MAPS} onClose={() => { setShowCreate(false); setCreateError(''); if (tutorialActive) setModalOpen(false); }} onCreate={handleCreate} isTutorial={tutorialActive} errorMsg={createError} />
       )}
     </div>
   );
