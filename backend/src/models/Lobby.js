@@ -23,6 +23,7 @@ const lobbySchema = new mongoose.Schema(
     match_count: { type: Number, default: 0 },
     started_at: { type: Date, default: null },
     expires_at: { type: Date, default: null },
+    custom_code: { type: String, default: null },
     config: {
       mapa: { type: String, default: 'Haven' },
       data_hora: { type: Date, required: true },
@@ -188,6 +189,11 @@ lobbySchema.methods.nextMatch = function () {
   this.match_count += 1;
   this.status = 'WAITING';
   this.started_at = null;
+  this.custom_code = null;
+};
+
+lobbySchema.methods.setCustomCode = function (code) {
+  this.custom_code = code || null;
 };
 
 lobbySchema.methods.finish = function () {
