@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Users, Plus, Calendar, LogOut } from 'lucide-react';
+import { Clock, Users, Plus, Calendar, LogOut, UserCircle } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
@@ -139,6 +139,13 @@ export default function LobbyPage() {
             className="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-valorant-card transition-colors"
           >
             <LogOut size={18} />
+          </button>
+          <button
+            onClick={() => navigate('/profile')}
+            title="Meu Perfil"
+            className="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-valorant-card transition-colors"
+          >
+            <UserCircle size={18} />
           </button>
         </div>
       </div>
