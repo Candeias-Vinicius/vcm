@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { TutorialProvider } from './context/TutorialContext';
+import TutorialOverlay from './components/TutorialOverlay';
 import LobbyPage from './pages/LobbyPage';
 import MatchPage from './pages/MatchPage';
 import LoginPage from './pages/LoginPage';
@@ -53,8 +55,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <NotificationToast />
-        <AppRoutes />
+        <TutorialProvider>
+          <TutorialOverlay />
+          <NotificationToast />
+          <AppRoutes />
+        </TutorialProvider>
       </AuthProvider>
     </BrowserRouter>
   );
