@@ -69,6 +69,22 @@ export const api = {
   resendVerification: () =>
     request(`${AUTH}/resend-verification`, { method: 'POST' }),
 
+  /** Trocar nickname do usuário logado (requer email verificado). */
+  updateNick: (newNick) =>
+    request(`${AUTH}/profile/nick`, { method: 'PATCH', body: { newNick } }),
+
+  /** Trocar senha do usuário logado (requer email verificado + senha atual). */
+  updatePassword: (currentPassword, newPassword) =>
+    request(`${AUTH}/profile/password`, { method: 'PATCH', body: { currentPassword, newPassword } }),
+
+  /** Solicitar troca de email (envia confirmação para o novo endereço). */
+  requestEmailChange: (newEmail) =>
+    request(`${AUTH}/profile/request-email-change`, { method: 'POST', body: { newEmail } }),
+
+  /** Confirmar troca de email via token recebido no novo endereço. */
+  confirmEmailChange: (email, token) =>
+    request(`${AUTH}/confirm-email-change`, { method: 'POST', body: { email, token } }),
+
   /**
    * Listar todas as partidas em ordem cronológica.
    * @returns {Lobby[]}

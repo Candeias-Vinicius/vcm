@@ -14,6 +14,7 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     const token = searchParams.get('token');
     const email = searchParams.get('email');
+    const type = searchParams.get('type');
 
     if (!token || !email) {
       setStatus('error');
@@ -21,11 +22,15 @@ export default function VerifyEmailPage() {
       return;
     }
 
-    api.verifyEmail(email, token)
+    const action = type === 'email-change'
+      ? api.confirmEmailChange(email, token)
+      : api.verifyEmail(email, token);
+
+    action
       .then(async () => {
         await refreshUser();
         setStatus('success');
-        setMessage('E-mail verificado com sucesso!');
+        setMessage(type === 'email-change' ? 'E-mail atualizado com sucesso!' : 'E-mail verificado com sucesso!');
         setTimeout(() => navigate('/'), 2500);
       })
       .catch(err => {

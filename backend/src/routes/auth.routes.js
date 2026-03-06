@@ -161,7 +161,7 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const user = await userRepo.findById(req.user.id);
     if (!user) return res.status(401).json({ error: 'Usuário não encontrado. Faça login novamente.' });
-    res.json({ user: { id: user._id, nick: user.nick, email: user.email, email_verified: user.email_verified ?? undefined } });
+    res.json({ user: { id: user._id, nick: user.nick, email: user.email, email_verified: user.email_verified ?? undefined, pending_email: user.pending_email ?? undefined } });
   } catch {
     res.status(500).json({ error: 'Erro ao verificar sessão.' });
   }
@@ -244,7 +244,50 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-router.post('/verify-email', async (req, res) => {
+router.patch('/profile/nick', requireAuth, async (req, res) => {
+  try {
+    const { newNick } = req.body;
+    if (!newNick) return res.status(400).json({ error: 'newNick é obrigatório' });
+    const user = await authService.updateNick(req.user.id, newNick);
+    res.json({ user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/profile/password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    await authService.updatePassword(req.user.id, currentPassword, newPassword);
+    res.json({ message: 'Senha atualizada com sucesso.' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/profile/request-email-change', requireAuth, async (req, res) => {
+  try {
+    const { newEmail } = req.body;
+    if (!newEmail) return res.status(400).json({ error: 'newEmail é obrigatório' });
+    await authService.requestEmailChange(req.user.id, newEmail);
+    res.json({ message: 'E-mail de confirmação enviado para o novo endereço.' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/confirm-email-change', async (req, res) => {
+  try {
+    const { email, token } = req.body;
+    if (!email || !token) return res.status(400).json({ error: 'email e token são obrigatórios' });
+    await authService.confirmEmailChange({ email, token });
+    res.json({ message: 'E-mail atualizado com sucesso!' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+
   try {
     const { email, token } = req.body;
     if (!email || !token) return res.status(400).json({ error: 'email e token são obrigatórios' });

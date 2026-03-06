@@ -21,6 +21,10 @@ function findDuplicate(email, nick) {
   return User.findOne({ $or: [{ email: email.toLowerCase() }, { nick }] });
 }
 
+function findOne(query) {
+  return User.findOne(query);
+}
+
 function create({ nick, email, password_hash }) {
   return User.create({ nick, email, password_hash });
 }
@@ -35,6 +39,7 @@ module.exports = {
   findByNick,
   findByLoginInput,
   findDuplicate,
+  findOne,
   create,
   save,
 };
