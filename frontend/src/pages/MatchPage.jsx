@@ -97,7 +97,8 @@ export default function MatchPage() {
 
   const handleUpdate = useCallback((data) => setLobby(data), []);
   const handleChatMessage = useCallback((msg) => setChatMessages(prev => [...prev, msg]), []);
-  const { sendMessage } = useSocket(id, handleUpdate, handleChatMessage);
+  const handleChatHistory = useCallback((msgs) => setChatMessages(msgs), []);
+  const { sendMessage } = useSocket(id, handleUpdate, handleChatMessage, handleChatHistory);
 
   useEffect(() => {
     api.getLobby(id)
