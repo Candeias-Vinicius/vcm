@@ -1,6 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  safelist: [
+    'relative', 'rounded-lg', 'z-[60]',
+    'ring-2', 'ring-valorant-red', 'ring-offset-2', 'ring-offset-valorant-dark',
+  ],
   theme: {
     extend: {
       colors: {

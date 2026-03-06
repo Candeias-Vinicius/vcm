@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Clock, Users, Plus, Calendar, LogOut } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import CreateLobbyModal from '../components/Calendar/CreateLobbyModal';
 import { formatDate, formatTime, formatWeekday } from '../utils/date';
 
@@ -26,10 +27,24 @@ function isFull(lobby) {
 
 export default function LobbyPage() {
   const { user, logout } = useAuth();
+  const { active: tutorialActive, modalOpen, setModalOpen, startTutorial, skipTutorial, nextStep, step } = useTutorial();
   const [lobbies, setLobbies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   const navigate = useNavigate();
+
+  // Check first access
+  useEffect(() => {
+    if (!localStorage.getItem('vcm_tutorial_done')) {
+      setShowWelcome(true);
+    }
+  }, []);
+
+  // Sync modal open state with tutorial
+  useEffect(() => {
+    if (tutorialActive) setShowCreate(modalOpen);
+  }, [tutorialActive, modalOpen]);
 
   useEffect(() => {
     api.getLobbies()
@@ -39,6 +54,13 @@ export default function LobbyPage() {
   }, []);
 
   async function handleCreate(payload) {
+    if (tutorialActive) {
+      // Tutorial mode: don't call API, just advance to MatchPage mock
+      setShowCreate(false);
+      setModalOpen(false);
+      nextStep(); // step 9 → 9 triggers navigate to /match/__tutorial__
+      return;
+    }
     try {
       const { lobby_id } = await api.createLobby(payload);
       setShowCreate(false);
@@ -48,12 +70,43 @@ export default function LobbyPage() {
     }
   }
 
+  function handleOpenCreate() {
+    if (tutorialActive) return; // tutorial controls the modal
+    setShowCreate(true);
+  }
+
   async function handleLogout() {
     await logout();
   }
 
   return (
     <div className="min-h-screen bg-valorant-dark">
+      {/* Welcome modal — first access */}
+      {showWelcome && !tutorialActive && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
+          <div className="bg-valorant-card border border-valorant-border rounded-2xl p-6 max-w-sm w-full flex flex-col gap-4 shadow-2xl">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-white font-bold text-xl">👋 Primeiro acesso!</h2>
+              <p className="text-gray-400 text-sm">Parece que é a primeira vez que você usa o VCM. Quer fazer um tutorial rápido para conhecer as funcionalidades?</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { setShowWelcome(false); startTutorial(user?.nick || 'Você'); }}
+                className="w-full bg-valorant-red hover:bg-red-600 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+              >
+                🚀 Fazer Tutorial
+              </button>
+              <button
+                onClick={() => { setShowWelcome(false); skipTutorial(); }}
+                className="w-full border border-valorant-border hover:border-gray-500 text-gray-400 hover:text-white py-3 rounded-xl text-sm transition-colors"
+              >
+                Pular por agora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-valorant-card border-b border-valorant-border px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-2">
@@ -62,7 +115,8 @@ export default function LobbyPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowCreate(true)}
+            id="tutorial-new-lobby-btn"
+            onClick={handleOpenCreate}
             className="flex items-center gap-1 bg-valorant-red hover:bg-red-500 transition-colors text-white text-sm font-bold px-3 py-2 rounded-lg"
           >
             <Plus size={16} /> Nova Sala
@@ -78,7 +132,7 @@ export default function LobbyPage() {
       </div>
 
       {/* Lobby list */}
-      <div className="px-4 py-4 flex flex-col gap-3">
+      <div id="tutorial-lobby-list" className="px-4 py-4 flex flex-col gap-3">
         {loading && <p className="text-gray-400 text-center py-12">Carregando...</p>}
         {!loading && lobbies.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-16 text-gray-500">
@@ -162,7 +216,7 @@ export default function LobbyPage() {
       </div>
 
       {showCreate && (
-        <CreateLobbyModal maps={MAPS} onClose={() => setShowCreate(false)} onCreate={handleCreate} />
+        <CreateLobbyModal maps={MAPS} onClose={() => { setShowCreate(false); if (tutorialActive) setModalOpen(false); }} onCreate={handleCreate} isTutorial={tutorialActive} />
       )}
     </div>
   );

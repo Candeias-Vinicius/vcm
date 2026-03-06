@@ -7,6 +7,7 @@ import {
 import { api } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import { formatFull, formatTime } from '../utils/date';
 import EditConfigModal from '../components/EditConfigModal';
 import ChatBox from '../components/ChatBox';
@@ -81,6 +82,9 @@ export default function MatchPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { active: tutorialActive, mockLobby, nextStep } = useTutorial();
+  const isTutorial = id === '__tutorial__';
+
   const [lobby, setLobby] = useState(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -98,18 +102,27 @@ export default function MatchPage() {
   const handleUpdate = useCallback((data) => setLobby(data), []);
   const handleChatMessage = useCallback((msg) => setChatMessages(prev => [...prev, msg]), []);
   const handleChatHistory = useCallback((msgs) => setChatMessages(msgs), []);
-  const { sendMessage } = useSocket(id, handleUpdate, handleChatMessage, handleChatHistory);
+  const { sendMessage } = useSocket(isTutorial ? null : id, handleUpdate, handleChatMessage, handleChatHistory);
+
+  // Tutorial mode: use mock lobby directly
+  useEffect(() => {
+    if (isTutorial && mockLobby) {
+      setLobby(mockLobby);
+      setLoading(false);
+    }
+  }, [isTutorial, mockLobby]);
 
   useEffect(() => {
+    if (isTutorial) return;
     api.getLobby(id)
       .then(setLobby)
       .catch(() => navigate('/'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, isTutorial]);
 
-  // Fetch custom code when IN_GAME and user is a player
+  // Fetch custom code when IN_GAME and user is a player (skip in tutorial)
   useEffect(() => {
-    if (!lobby || !user) return;
+    if (isTutorial || !lobby || !user) return;
     const isPlayer = lobby.players.some(p => p.nick === user.nick);
     if (lobby.status === 'IN_GAME' && isPlayer) {
       api.getCustomCode(id)
@@ -118,7 +131,7 @@ export default function MatchPage() {
     } else {
       setCustomCode('');
     }
-  }, [lobby?.status, id, user]);
+  }, [lobby?.status, id, user, isTutorial]);
 
   function isAlreadyIn() {
     if (!lobby || !user) return false;
@@ -174,12 +187,16 @@ export default function MatchPage() {
     try { await fn(); } catch (err) { alert(err.message); } finally { setBusy(false); }
   }
 
-  const handleCheckin = (nick) => run(async () => {
-    const updated = await api.confirmCheckin(id, nick);
-    setLobby(updated);
-  });
+  const handleCheckin = (nick) => {
+    if (isTutorial) return;
+    run(async () => {
+      const updated = await api.confirmCheckin(id, nick);
+      setLobby(updated);
+    });
+  };
 
   const handleKick = (nick) => {
+    if (isTutorial) return;
     if (!window.confirm(`Remover ${nick} da partida?`)) return;
     run(async () => {
       const updated = await api.kickPlayer(id, nick);
@@ -187,19 +204,26 @@ export default function MatchPage() {
     });
   };
 
-  const handleStart = () => run(async () => {
-    const updated = await api.startMatch(id);
-    setLobby(updated);
-  });
+  const handleStart = () => {
+    if (isTutorial) return;
+    run(async () => {
+      const updated = await api.startMatch(id);
+      setLobby(updated);
+    });
+  };
 
-  const handleNext = () => run(async () => {
-    const updated = await api.nextMatch(id);
-    setLobby(updated);
-    setCustomCode('');
-    setCustomCodeInput('');
-  });
+  const handleNext = () => {
+    if (isTutorial) return;
+    run(async () => {
+      const updated = await api.nextMatch(id);
+      setLobby(updated);
+      setCustomCode('');
+      setCustomCodeInput('');
+    });
+  };
 
   const handleSaveCustomCode = async () => {
+    if (isTutorial) { setCustomCode(customCodeInput.trim()); return; }
     setSavingCode(true);
     try {
       await api.setCustomCode(id, customCodeInput.trim());
@@ -212,6 +236,7 @@ export default function MatchPage() {
   };
 
   const handleCancel = () => {
+    if (isTutorial) return;
     if (!window.confirm('Cancelar esta partida? Ela ainda ficará visível por 24h.')) return;
     run(async () => {
       const updated = await api.cancelLobby(id);
@@ -247,7 +272,7 @@ export default function MatchPage() {
   const maxPlayers = config?.max_players ?? 10;
   const waitlistLimit = config?.waitlist_limit ?? 20;
   const slots = Array.from({ length: maxPlayers }, (_, i) => players[i] || null);
-  const isAdm = user && lobby.adm_user_id && user.id === lobby.adm_user_id;
+  const isAdm = isTutorial || (user && lobby.adm_user_id && user.id === lobby.adm_user_id);
   const isInPlayers = players.some(p => p.nick === user?.nick);
   const isInWaitlist = waitlist.some(p => p.nick === user?.nick);
   const isParticipant = isInPlayers || isInWaitlist;
@@ -256,7 +281,7 @@ export default function MatchPage() {
   return (
     <div className="min-h-screen bg-valorant-dark pb-8">
       {/* Banner do mapa */}
-      <div className="relative h-36 w-full">
+      <div id="tutorial-match-banner" className="relative h-36 w-full">
         <img
           src={MAP_IMAGE[config.mapa] || '/maps/haven.webp'}
           alt={config.mapa}
@@ -282,6 +307,7 @@ export default function MatchPage() {
             </button>
           )}
           <button
+            id="tutorial-match-share"
             onClick={handleShare}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-all ${
               copied ? 'bg-green-600 text-white' : 'bg-black/50 backdrop-blur-sm text-white hover:bg-black/70'
@@ -341,7 +367,7 @@ export default function MatchPage() {
 
       {/* Controles do ADM */}
       {isAdm && !inactive && (
-        <div className="mx-4 mt-4 flex flex-col gap-2">
+        <div id="tutorial-match-adm-controls" className="mx-4 mt-4 flex flex-col gap-2">
           {status === 'WAITING' && (
             <button
               onClick={handleStart}
@@ -372,7 +398,7 @@ export default function MatchPage() {
 
       {/* Código personalizado da partida — ADM pode definir; jogadores titulares veem quando IN_GAME */}
       {isAdm && !inactive && (
-        <div className="mx-4 mt-4 bg-valorant-card border border-valorant-border rounded-xl p-4 flex flex-col gap-3">
+        <div id="tutorial-match-custom-code" className="mx-4 mt-4 bg-valorant-card border border-valorant-border rounded-xl p-4 flex flex-col gap-3">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
             <Key size={12} /> Código da Partida Personalizada
           </p>
@@ -485,7 +511,7 @@ export default function MatchPage() {
       )}
 
       {/* Grade de jogadores */}
-      <div className="px-4 py-4">
+      <div id="tutorial-match-players" className="px-4 py-4">
         <h3 className="flex items-center gap-2 text-gray-400 text-sm font-bold uppercase tracking-wider mb-3">
           <Users size={14} /> Jogadores ({players.length}/{maxPlayers}) · Espera ({waitlist.length}/{waitlistLimit})
         </h3>
@@ -551,11 +577,13 @@ export default function MatchPage() {
 
       {/* Chat da sala */}
       {user && (
-        <ChatBox
-          sendMessage={sendMessage}
-          messages={chatMessages}
-          currentNick={user.nick}
-        />
+        <div id="tutorial-match-chat">
+          <ChatBox
+            sendMessage={sendMessage}
+            messages={chatMessages}
+            currentNick={user.nick}
+          />
+        </div>
       )}
 
       {/* Modal de edição de config (ADM) */}

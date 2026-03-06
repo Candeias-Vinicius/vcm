@@ -39,7 +39,7 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
+          <div id="tutorial-modal-mapa">
             <label className="text-gray-400 text-sm mb-1 block">Mapa</label>
             <select
               value={form.mapa}
@@ -50,7 +50,7 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
             </select>
           </div>
 
-          <div>
+          <div id="tutorial-modal-datahora">
             <label className="text-gray-400 text-sm mb-2 block">Data e Hora</label>
             <DateTimePicker
               value={form.data_hora}
@@ -58,7 +58,7 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
             />
           </div>
 
-          <div>
+          <div id="tutorial-modal-maxplayers">
             <label className="text-gray-400 text-sm mb-1 block">Vagas (máx. jogadores, 2–10)</label>
             <input
               type="number"
@@ -70,7 +70,7 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
             />
           </div>
 
-          <div>
+          <div id="tutorial-modal-waitlist">
             <label className="text-gray-400 text-sm mb-1 block">Limite da lista de espera</label>
             <input
               type="number"
@@ -82,7 +82,7 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div id="tutorial-modal-admplayer" className="flex items-center gap-3">
             <input
               type="checkbox"
               id="adm_player"
@@ -96,6 +96,7 @@ export default function CreateLobbyModal({ maps, onClose, onCreate }) {
           </div>
 
           <button
+            id="tutorial-modal-submit"
             type="submit"
             className="bg-valorant-red hover:bg-red-500 transition-colors text-white font-bold py-3 rounded-lg uppercase tracking-wider"
           >
