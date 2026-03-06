@@ -2,18 +2,43 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
-const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;          // 1 hour
+const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const userSchema = new mongoose.Schema(
   {
     nick: { type: String, required: true, unique: true, trim: true, minlength: 2, maxlength: 20 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password_hash: { type: String, required: true },
+    email_verified: { type: Boolean, default: false },
+    verification_token: { type: String, default: null },
+    verification_token_expires: { type: Date, default: null },
     reset_token: { type: String, default: null },
     reset_token_expires: { type: Date, default: null },
   },
   { timestamps: true }
 );
+
+userSchema.methods.initiateEmailVerification = async function () {
+  const rawToken = uuidv4();
+  this.verification_token = await bcrypt.hash(rawToken, 10);
+  this.verification_token_expires = new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS);
+  return rawToken;
+};
+
+userSchema.methods.verifyEmailToken = async function (rawToken) {
+  if (!this.verification_token || !this.verification_token_expires) {
+    throw new Error('Token inválido');
+  }
+  if (this.verification_token_expires < new Date()) {
+    throw new Error('Link de verificação expirado. Solicite um novo.');
+  }
+  const valid = await bcrypt.compare(rawToken, this.verification_token);
+  if (!valid) throw new Error('Token inválido');
+  this.email_verified = true;
+  this.verification_token = null;
+  this.verification_token_expires = null;
+};
 
 userSchema.methods.hasValidResetToken = function () {
   return Boolean(

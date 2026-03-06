@@ -4,7 +4,7 @@ import { api } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);       // { id, nick, email }
+  const [user, setUser] = useState(null);       // { id, nick, email, email_verified }
   const [loading, setLoading] = useState(true); // carregando sessão inicial
 
   useEffect(() => {
@@ -31,8 +31,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  async function refreshUser() {
+    try {
+      const { user } = await api.me();
+      setUser(user);
+      return user;
+    } catch {
+      return null;
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

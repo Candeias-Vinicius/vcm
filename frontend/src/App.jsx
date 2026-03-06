@@ -2,12 +2,14 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TutorialProvider } from './context/TutorialContext';
 import TutorialOverlay from './components/TutorialOverlay';
+import VerifyEmailBanner from './components/VerifyEmailBanner';
 import LobbyPage from './pages/LobbyPage';
 import MatchPage from './pages/MatchPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import NotificationToast from './components/NotificationToast';
 
 function ProtectedRoute({ children }) {
@@ -42,6 +44,9 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
       <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
 
+      {/* Rota pública de verificação de email */}
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+
       {/* Rotas protegidas (requer login) */}
       <Route path="/" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} />
       <Route path="/match/:id" element={<ProtectedRoute><MatchPage /></ProtectedRoute>} />
@@ -58,6 +63,7 @@ export default function App() {
         <TutorialProvider>
           <TutorialOverlay />
           <NotificationToast />
+          <VerifyEmailBanner />
           <AppRoutes />
         </TutorialProvider>
       </AuthProvider>
