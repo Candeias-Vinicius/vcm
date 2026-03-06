@@ -10,7 +10,7 @@ let socketInstance = null;
 
 function getSocket() {
   if (!socketInstance) {
-    socketInstance = io(SOCKET_URL, { autoConnect: false, path: '/socket.io' });
+    socketInstance = io(SOCKET_URL, { autoConnect: false, path: '/socket.io', withCredentials: true });
   }
   return socketInstance;
 }
