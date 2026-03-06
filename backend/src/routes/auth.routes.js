@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authService = require('../services/auth.service');
+const profileService = require('../services/profile.service');
 const userRepo = require('../repositories/user.repository');
 const { requireAuth } = require('../middleware/auth');
 
@@ -248,7 +249,7 @@ router.patch('/profile/nick', requireAuth, async (req, res) => {
   try {
     const { newNick } = req.body;
     if (!newNick) return res.status(400).json({ error: 'newNick é obrigatório' });
-    const user = await authService.updateNick(req.user.id, newNick);
+    const user = await profileService.updateNick(req.user.id, newNick);
     res.json({ user });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -258,7 +259,7 @@ router.patch('/profile/nick', requireAuth, async (req, res) => {
 router.patch('/profile/password', requireAuth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    await authService.updatePassword(req.user.id, currentPassword, newPassword);
+    await profileService.updatePassword(req.user.id, currentPassword, newPassword);
     res.json({ message: 'Senha atualizada com sucesso.' });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -269,7 +270,7 @@ router.post('/profile/request-email-change', requireAuth, async (req, res) => {
   try {
     const { newEmail } = req.body;
     if (!newEmail) return res.status(400).json({ error: 'newEmail é obrigatório' });
-    await authService.requestEmailChange(req.user.id, newEmail);
+    await profileService.requestEmailChange(req.user.id, newEmail);
     res.json({ message: 'E-mail de confirmação enviado para o novo endereço.' });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -280,7 +281,7 @@ router.post('/confirm-email-change', async (req, res) => {
   try {
     const { email, token } = req.body;
     if (!email || !token) return res.status(400).json({ error: 'email e token são obrigatórios' });
-    await authService.confirmEmailChange({ email, token });
+    await profileService.confirmEmailChange({ email, token });
     res.json({ message: 'E-mail atualizado com sucesso!' });
   } catch (err) {
     res.status(400).json({ error: err.message });

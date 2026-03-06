@@ -67,6 +67,12 @@ userSchema.methods.confirmEmailChangeToken = async function (rawToken) {
 };
 
 
+userSchema.methods.changePassword = async function (currentPassword, newPassword) {
+  const valid = await bcrypt.compare(currentPassword, this.password_hash);
+  if (!valid) throw new Error('Senha atual incorreta');
+  this.password_hash = await bcrypt.hash(newPassword, 10);
+};
+
 userSchema.methods.hasValidResetToken = function () {
   return Boolean(
     this.reset_token &&
