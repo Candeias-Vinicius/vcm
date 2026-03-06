@@ -288,6 +288,7 @@ router.post('/confirm-email-change', async (req, res) => {
 });
 
 
+router.post('/verify-email', async (req, res) => {
   try {
     const { email, token } = req.body;
     if (!email || !token) return res.status(400).json({ error: 'email e token são obrigatórios' });
