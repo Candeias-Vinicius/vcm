@@ -34,12 +34,14 @@ export default function LobbyPage() {
   const [showWelcome, setShowWelcome] = useState(false);
   const navigate = useNavigate();
 
-  // Check first access
+  // Check first access (per user account)
   useEffect(() => {
-    if (!localStorage.getItem('vcm_tutorial_done')) {
+    if (!user) return;
+    const tutorialKey = `vcm_tutorial_done_${user.id}`;
+    if (!localStorage.getItem(tutorialKey)) {
       setShowWelcome(true);
     }
-  }, []);
+  }, [user]);
 
   // Sync modal open state with tutorial
   useEffect(() => {
