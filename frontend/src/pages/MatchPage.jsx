@@ -11,6 +11,7 @@ import { useTutorial } from '../context/TutorialContext';
 import { formatFull, formatTime } from '../utils/date';
 import EditConfigModal from '../components/EditConfigModal';
 import ChatBox from '../components/ChatBox';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 function PlayerCard({ player, isCurrentUser, isAdm, onCheckin, onKick, busy, inactive }) {
   return (
@@ -98,6 +99,8 @@ export default function MatchPage() {
   const [savingCode, setSavingCode] = useState(false);
   const [codeVisible, setCodeVisible] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, message: '', onConfirm: null, confirmLabel: 'Confirmar' });
 
   const handleUpdate = useCallback((data) => setLobby(data), []);
   const handleChatMessage = useCallback((msg) => setChatMessages(prev => [...prev, msg]), []);
@@ -151,6 +154,17 @@ export default function MatchPage() {
     }
   }
 
+  function showConfirm(message, onConfirm, confirmLabel = 'Confirmar') {
+    setConfirmDialog({ open: true, message, onConfirm, confirmLabel });
+  }
+  function closeConfirm() {
+    setConfirmDialog(d => ({ ...d, open: false, onConfirm: null }));
+  }
+  function showError(msg) {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(''), 5000);
+  }
+
   async function handleShare() {
     await navigator.clipboard.writeText(window.location.href);
     setCopied(true);
@@ -158,16 +172,18 @@ export default function MatchPage() {
   }
 
   async function handleLeave() {
-    if (!window.confirm('Sair desta partida?')) return;
-    setLeaving(true);
-    try {
-      const updated = await api.leaveMatch(id);
-      setLobby(updated);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setLeaving(false);
-    }
+    showConfirm('Sair desta partida?', async () => {
+      closeConfirm();
+      setLeaving(true);
+      try {
+        const updated = await api.leaveMatch(id);
+        setLobby(updated);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setLeaving(false);
+      }
+    }, 'Sair');
   }
 
   async function handleTogglePosition() {
@@ -176,7 +192,7 @@ export default function MatchPage() {
       const updated = await api.togglePosition(id);
       setLobby(updated);
     } catch (err) {
-      alert(err.message);
+      showError(err.message);
     } finally {
       setToggling(false);
     }
@@ -184,7 +200,7 @@ export default function MatchPage() {
 
   async function run(fn) {
     setBusy(true);
-    try { await fn(); } catch (err) { alert(err.message); } finally { setBusy(false); }
+    try { await fn(); } catch (err) { showError(err.message); } finally { setBusy(false); }
   }
 
   const handleCheckin = (nick) => {
@@ -197,11 +213,13 @@ export default function MatchPage() {
 
   const handleKick = (nick) => {
     if (isTutorial) return;
-    if (!window.confirm(`Remover ${nick} da partida?`)) return;
-    run(async () => {
-      const updated = await api.kickPlayer(id, nick);
-      setLobby(updated);
-    });
+    showConfirm(`Remover ${nick} da partida?`, () => {
+      closeConfirm();
+      run(async () => {
+        const updated = await api.kickPlayer(id, nick);
+        setLobby(updated);
+      });
+    }, 'Remover');
   };
 
   const handleStart = () => {
@@ -229,7 +247,7 @@ export default function MatchPage() {
       await api.setCustomCode(id, customCodeInput.trim());
       setCustomCode(customCodeInput.trim());
     } catch (err) {
-      alert(err.message);
+      showError(err.message);
     } finally {
       setSavingCode(false);
     }
@@ -237,11 +255,13 @@ export default function MatchPage() {
 
   const handleCancel = () => {
     if (isTutorial) return;
-    if (!window.confirm('Cancelar esta partida? Ela ainda ficará visível por 24h.')) return;
-    run(async () => {
-      const updated = await api.cancelLobby(id);
-      setLobby(updated);
-    });
+    showConfirm('Cancelar esta partida? Ela ainda ficará visível por 24h.', () => {
+      closeConfirm();
+      run(async () => {
+        const updated = await api.cancelLobby(id);
+        setLobby(updated);
+      });
+    }, 'Cancelar partida');
   };
 
   const handleSaveConfig = async (form) => {
@@ -280,6 +300,21 @@ export default function MatchPage() {
 
   return (
     <div className="min-h-screen bg-valorant-dark pb-8">
+      <ConfirmDialog
+        open={confirmDialog.open}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+      />
+
+      {/* Error banner */}
+      {errorMsg && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[90] bg-red-900 border border-red-700 text-red-200 text-sm font-medium px-4 py-3 rounded-xl shadow-xl max-w-sm w-full mx-4">
+          {errorMsg}
+        </div>
+      )}
+
       {/* Banner do mapa */}
       <div id="tutorial-match-banner" className="relative h-36 w-full">
         <img

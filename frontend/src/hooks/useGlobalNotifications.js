@@ -13,17 +13,19 @@ function getGlobalSocket() {
   return globalSocket;
 }
 
-export function useGlobalNotifications(onAlert, onDelayed) {
+export function useGlobalNotifications(userNick, onAlert, onDelayed) {
   useEffect(() => {
     const socket = getGlobalSocket();
     if (!socket.connected) socket.connect();
 
     const handleAlert = (data) => {
+      if (data.player_nicks && userNick && !data.player_nicks.includes(userNick)) return;
       showNativeNotification('⏰ Partida em 10 minutos!', data.message);
       onAlert?.(data);
     };
 
     const handleDelayed = (data) => {
+      if (data.player_nicks && userNick && !data.player_nicks.includes(userNick)) return;
       showNativeNotification('⚠️ Partida atrasada', data.message);
       onDelayed?.(data);
     };
@@ -35,5 +37,5 @@ export function useGlobalNotifications(onAlert, onDelayed) {
       socket.off('lobby_alert', handleAlert);
       socket.off('lobby_delayed', handleDelayed);
     };
-  }, []);
+  }, [userNick]);
 }

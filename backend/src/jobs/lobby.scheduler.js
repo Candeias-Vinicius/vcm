@@ -14,9 +14,15 @@ function startScheduler(io) {
       });
 
       alertLobbies.forEach(lobby => {
+        const player_nicks = [
+          lobby.config?.adm_nick,
+          ...lobby.players.map(p => p.nick),
+          ...lobby.waitlist.map(p => p.nick),
+        ].filter(Boolean);
         io.emit('lobby_alert', {
           lobby_id: lobby.lobby_id,
           message: `A partida começa em 10 minutos! Mapa: ${lobby.config.mapa}`,
+          player_nicks,
         });
       });
 
@@ -26,9 +32,15 @@ function startScheduler(io) {
       });
 
       delayedLobbies.forEach(lobby => {
+        const player_nicks = [
+          lobby.config?.adm_nick,
+          ...lobby.players.map(p => p.nick),
+          ...lobby.waitlist.map(p => p.nick),
+        ].filter(Boolean);
         io.emit('lobby_delayed', {
           lobby_id: lobby.lobby_id,
           message: `A partida no mapa ${lobby.config.mapa} está atrasada.`,
+          player_nicks,
         });
       });
     } catch (err) {

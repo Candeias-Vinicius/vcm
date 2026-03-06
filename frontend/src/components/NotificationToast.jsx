@@ -2,8 +2,10 @@ import { useState, useCallback, useEffect } from 'react';
 import { Bell, X, BellOff } from 'lucide-react';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
 import { getPermission, requestPermission, isNotificationSupported } from '../utils/notifications';
+import { useAuth } from '../context/AuthContext';
 
 export default function NotificationToast() {
+  const { user } = useAuth();
   const [toasts, setToasts] = useState([]);
   const [showPermissionBanner, setShowPermissionBanner] = useState(false);
 
@@ -22,6 +24,7 @@ export default function NotificationToast() {
   }, []);
 
   useGlobalNotifications(
+    user?.nick,
     (data) => addToast(data.message, 'alert'),
     (data) => addToast(data.message, 'delayed'),
   );
