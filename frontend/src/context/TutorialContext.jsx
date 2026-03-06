@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 
 const TutorialContext = createContext(null);
 
@@ -137,11 +138,14 @@ function buildMockLobby(nick) {
 }
 
 export function TutorialProvider({ children }) {
+  const { user } = useAuth();
   const [active, setActive] = useState(false);
   const [step, setStep] = useState(0);
   const [mockLobby, setMockLobby] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const navigate = useNavigate();
+
+  const tutorialKey = `vcm_tutorial_done_${user?.id || 'anon'}`;
 
   const startTutorial = useCallback((nick) => {
     setMockLobby(buildMockLobby(nick));
@@ -151,12 +155,12 @@ export function TutorialProvider({ children }) {
   }, []);
 
   const endTutorial = useCallback(() => {
-    localStorage.setItem('vcm_tutorial_done', '1');
+    localStorage.setItem(tutorialKey, '1');
     setActive(false);
     setStep(0);
     setModalOpen(false);
     navigate('/');
-  }, [navigate]);
+  }, [navigate, tutorialKey]);
 
   const nextStep = useCallback(() => {
     setStep(prev => {
@@ -171,7 +175,7 @@ export function TutorialProvider({ children }) {
       }
 
       if (next >= TUTORIAL_STEPS.length) {
-        localStorage.setItem('vcm_tutorial_done', '1');
+        localStorage.setItem(tutorialKey, '1');
         setActive(false);
         navigate('/');
         return 0;
@@ -185,7 +189,7 @@ export function TutorialProvider({ children }) {
 
       return next;
     });
-  }, [navigate]);
+  }, [navigate, tutorialKey]);
 
   const prevStep = useCallback(() => {
     setStep(prev => {
@@ -207,11 +211,11 @@ export function TutorialProvider({ children }) {
   }, [navigate]);
 
   const skipTutorial = useCallback(() => {
-    localStorage.setItem('vcm_tutorial_done', '1');
+    localStorage.setItem(tutorialKey, '1');
     setActive(false);
     setStep(0);
     setModalOpen(false);
-  }, []);
+  }, [tutorialKey]);
 
   return (
     <TutorialContext.Provider value={{
