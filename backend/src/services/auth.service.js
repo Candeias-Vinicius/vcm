@@ -3,6 +3,10 @@ const userRepo = require('../repositories/user.repository');
 const emailService = require('./email.service');
 const { generateToken } = require('../config/jwt');
 
+function serializeUser(user) {
+  return { id: user._id, nick: user.nick, email: user.email, email_verified: user.email_verified ?? undefined };
+}
+
 async function register({ nick, email, password }) {
   if (!nick || !email || !password) throw new Error('nick, email e senha são obrigatórios');
   if (password.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres');
@@ -15,8 +19,18 @@ async function register({ nick, email, password }) {
 
   const password_hash = await bcrypt.hash(password, 10);
   const user = await userRepo.create({ nick, email, password_hash });
+
+  // Send verification email (non-blocking — don't fail register if email fails)
+  try {
+    const rawToken = await user.initiateEmailVerification();
+    await userRepo.save(user);
+    await emailService.sendEmailVerification({ email: user.email, token: rawToken });
+  } catch (err) {
+    console.error('[register] Falha ao enviar email de verificação:', err.message);
+  }
+
   const token = generateToken(user);
-  return { user: { id: user._id, nick: user.nick, email: user.email }, token };
+  return { user: serializeUser(user), token };
 }
 
 async function login({ login, password }) {
@@ -29,7 +43,7 @@ async function login({ login, password }) {
   if (!valid) throw new Error('Credenciais inválidas');
 
   const token = generateToken(user);
-  return { user: { id: user._id, nick: user.nick, email: user.email }, token };
+  return { user: serializeUser(user), token };
 }
 
 async function forgotPassword(email) {
@@ -53,4 +67,24 @@ async function resetPassword({ email, token, newPassword }) {
   await userRepo.save(user);
 }
 
-module.exports = { register, login, forgotPassword, resetPassword };
+async function verifyEmail({ email, token }) {
+  if (!email || !token) throw new Error('Dados incompletos');
+
+  const user = await userRepo.findByEmail(email);
+  if (!user) throw new Error('Token inválido');
+
+  await user.verifyEmailToken(token);
+  await userRepo.save(user);
+}
+
+async function resendVerification(userId) {
+  const user = await userRepo.findById(userId);
+  if (!user) throw new Error('Usuário não encontrado');
+  if (user.email_verified) throw new Error('E-mail já verificado');
+
+  const rawToken = await user.initiateEmailVerification();
+  await userRepo.save(user);
+  await emailService.sendEmailVerification({ email: user.email, token: rawToken });
+}
+
+module.exports = { register, login, forgotPassword, resetPassword, verifyEmail, resendVerification };

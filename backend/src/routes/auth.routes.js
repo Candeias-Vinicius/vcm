@@ -161,7 +161,7 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const user = await userRepo.findById(req.user.id);
     if (!user) return res.status(401).json({ error: 'Usuário não encontrado. Faça login novamente.' });
-    res.json({ user: { id: user._id, nick: user.nick, email: user.email } });
+    res.json({ user: { id: user._id, nick: user.nick, email: user.email, email_verified: user.email_verified ?? undefined } });
   } catch {
     res.status(500).json({ error: 'Erro ao verificar sessão.' });
   }
@@ -239,6 +239,26 @@ router.post('/reset-password', async (req, res) => {
     const { email, token, newPassword } = req.body;
     await authService.resetPassword({ email, token, newPassword });
     res.json({ message: 'Senha atualizada com sucesso. Faça login com sua nova senha.' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { email, token } = req.body;
+    if (!email || !token) return res.status(400).json({ error: 'email e token são obrigatórios' });
+    await authService.verifyEmail({ email, token });
+    res.json({ message: 'E-mail verificado com sucesso!' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/resend-verification', requireAuth, async (req, res) => {
+  try {
+    await authService.resendVerification(req.user.id);
+    res.json({ message: 'E-mail de verificação reenviado.' });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

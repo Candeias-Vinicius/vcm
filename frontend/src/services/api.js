@@ -61,6 +61,14 @@ export const api = {
   resetPassword: (email, token, newPassword) =>
     request(`${AUTH}/reset-password`, { method: 'POST', body: { email, token, newPassword } }),
 
+  /** Verificar email usando token recebido no link. */
+  verifyEmail: (email, token) =>
+    request(`${AUTH}/verify-email`, { method: 'POST', body: { email, token } }),
+
+  /** Reenviar email de verificação para o usuário logado. */
+  resendVerification: () =>
+    request(`${AUTH}/resend-verification`, { method: 'POST' }),
+
   /**
    * Listar todas as partidas em ordem cronológica.
    * @returns {Lobby[]}
