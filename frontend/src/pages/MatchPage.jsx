@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle, Clock, Users, Shield, XCircle, Share2, LogOut,
-  Play, Edit2, SkipForward,
+  Play, Edit2, SkipForward, Key, Eye, EyeOff,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
 import { formatFull, formatTime } from '../utils/date';
 import EditConfigModal from '../components/EditConfigModal';
+import ChatBox from '../components/ChatBox';
 
 function PlayerCard({ player, isCurrentUser, isAdm, onCheckin, onKick, busy, inactive }) {
   return (
@@ -88,9 +89,15 @@ export default function MatchPage() {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [customCode, setCustomCode] = useState('');
+  const [customCodeInput, setCustomCodeInput] = useState('');
+  const [savingCode, setSavingCode] = useState(false);
+  const [codeVisible, setCodeVisible] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const handleUpdate = useCallback((data) => setLobby(data), []);
-  useSocket(id, handleUpdate);
+  const handleChatMessage = useCallback((msg) => setChatMessages(prev => [...prev, msg]), []);
+  const { sendMessage } = useSocket(id, handleUpdate, handleChatMessage);
 
   useEffect(() => {
     api.getLobby(id)
@@ -98,6 +105,19 @@ export default function MatchPage() {
       .catch(() => navigate('/'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Fetch custom code when IN_GAME and user is a player
+  useEffect(() => {
+    if (!lobby || !user) return;
+    const isPlayer = lobby.players.some(p => p.nick === user.nick);
+    if (lobby.status === 'IN_GAME' && isPlayer) {
+      api.getCustomCode(id)
+        .then(({ code }) => setCustomCode(code || ''))
+        .catch(() => setCustomCode(''));
+    } else {
+      setCustomCode('');
+    }
+  }, [lobby?.status, id, user]);
 
   function isAlreadyIn() {
     if (!lobby || !user) return false;
@@ -174,7 +194,21 @@ export default function MatchPage() {
   const handleNext = () => run(async () => {
     const updated = await api.nextMatch(id);
     setLobby(updated);
+    setCustomCode('');
+    setCustomCodeInput('');
   });
+
+  const handleSaveCustomCode = async () => {
+    setSavingCode(true);
+    try {
+      await api.setCustomCode(id, customCodeInput.trim());
+      setCustomCode(customCodeInput.trim());
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSavingCode(false);
+    }
+  };
 
   const handleCancel = () => {
     if (!window.confirm('Cancelar esta partida? Ela ainda ficará visível por 24h.')) return;
@@ -335,6 +369,70 @@ export default function MatchPage() {
         </div>
       )}
 
+      {/* Código personalizado da partida — ADM pode definir; jogadores titulares veem quando IN_GAME */}
+      {isAdm && !inactive && (
+        <div className="mx-4 mt-4 bg-valorant-card border border-valorant-border rounded-xl p-4 flex flex-col gap-3">
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+            <Key size={12} /> Código da Partida Personalizada
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Ex: ABCD-1234"
+              value={customCodeInput}
+              onChange={e => setCustomCodeInput(e.target.value)}
+              className="flex-1 bg-valorant-dark border border-valorant-border text-white px-3 py-2 rounded-lg text-sm placeholder-gray-600"
+            />
+            <button
+              onClick={handleSaveCustomCode}
+              disabled={savingCode || !customCodeInput.trim()}
+              className="px-4 py-2 bg-valorant-red hover:bg-red-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors"
+            >
+              {savingCode ? '...' : 'Salvar'}
+            </button>
+          </div>
+          {customCode && (
+            <div className="flex items-center justify-between bg-valorant-dark rounded-lg px-3 py-2">
+              <span className="text-gray-400 text-xs">Código atual:</span>
+              <span className="text-white font-mono font-bold text-sm tracking-widest">{customCode}</span>
+            </div>
+          )}
+          {!customCode && status === 'IN_GAME' && (
+            <p className="text-gray-600 text-xs">Nenhum código definido. Os jogadores não conseguirão ver o código.</p>
+          )}
+          {status === 'WAITING' && (
+            <p className="text-gray-600 text-xs">O código será revelado aos titulares quando a partida for iniciada.</p>
+          )}
+        </div>
+      )}
+
+      {/* Exibir código para jogadores titulares (não-ADM) quando IN_GAME */}
+      {!isAdm && isInPlayers && status === 'IN_GAME' && (
+        <div className="mx-4 mt-4 bg-valorant-card border border-yellow-800 rounded-xl p-4 flex flex-col gap-2">
+          <p className="text-yellow-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+            <Key size={12} /> Código da Partida Personalizada
+          </p>
+          {customCode ? (
+            <div className="flex items-center justify-between">
+              <span
+                className={`font-mono font-bold text-lg tracking-widest ${codeVisible ? 'text-white' : 'text-transparent bg-clip-text select-none blur-sm pointer-events-none'}`}
+              >
+                {customCode}
+              </span>
+              <button
+                onClick={() => setCodeVisible(v => !v)}
+                className="text-gray-400 hover:text-white ml-3 flex-shrink-0"
+                title={codeVisible ? 'Ocultar código' : 'Revelar código'}
+              >
+                {codeVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">Aguardando o ADM definir o código...</p>
+          )}
+        </div>
+      )}
+
       {/* Controles de posição — todos os participantes (inclusive ADM) */}
       {(isParticipant || isAdm) && !inactive && (
         <div className="mx-4 mt-4 flex flex-col gap-2">
@@ -448,6 +546,15 @@ export default function MatchPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Chat da sala */}
+      {user && (
+        <ChatBox
+          sendMessage={sendMessage}
+          messages={chatMessages}
+          currentNick={user.nick}
+        />
       )}
 
       {/* Modal de edição de config (ADM) */}
