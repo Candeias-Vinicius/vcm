@@ -67,6 +67,7 @@ userSchema.methods.confirmEmailChangeToken = async function (rawToken) {
 };
 
 
+userSchema.methods.hasValidResetToken = function () {
   return Boolean(
     this.reset_token &&
     this.reset_token_expires &&
