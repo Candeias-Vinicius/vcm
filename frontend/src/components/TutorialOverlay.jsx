@@ -4,9 +4,10 @@ import { useTutorial, TUTORIAL_STEPS } from '../context/TutorialContext';
 
 export default function TutorialOverlay() {
   const { active, step, currentStepDef, nextStep, prevStep, skipTutorial, isLastStep } = useTutorial();
-  const [tooltipStyle, setTooltipStyle] = useState({ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' });
+  const [tooltipStyle, setTooltipStyle] = useState({ position: 'fixed', top: '-9999px', left: '-9999px', zIndex: 70, maxWidth: '340px', width: '90vw' });
   const [highlightStyle, setHighlightStyle] = useState(null);
   const prevTargetRef = useRef(null);
+  const tooltipRef = useRef(null);
 
   useEffect(() => {
     if (!active || !currentStepDef) return;
@@ -37,58 +38,62 @@ export default function TutorialOverlay() {
     el.classList.add('relative', 'z-[60]', 'ring-2', 'ring-valorant-red', 'ring-offset-2', 'ring-offset-valorant-dark', 'rounded-lg');
     prevTargetRef.current = el;
 
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Instant scroll so the element is at a stable position when we measure
+    el.scrollIntoView({ behavior: 'instant', block: 'center' });
 
-    // Position tooltip
-    setTimeout(() => {
-      const rect = el.getBoundingClientRect();
-      const pos = currentStepDef.position || 'bottom';
-      const margin = 16;
-      const tooltipW = Math.min(340, window.innerWidth * 0.9);
-      const TOOLTIP_H = 240; // generous estimate for flip/clamp calculations
+    // Wait two animation frames for layout to fully settle before measuring
+    let raf1, raf2;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const rect = el.getBoundingClientRect();
+        const pos = currentStepDef.position || 'bottom';
+        const margin = 12;
+        const tooltipW = Math.min(340, window.innerWidth * 0.9);
+        // Measure actual tooltip height; fall back to 200 if not yet in DOM
+        const actualH = tooltipRef.current?.offsetHeight || 200;
 
-      const bottomPos = rect.bottom + margin;
-      const topPos = rect.top - margin - TOOLTIP_H;
+        let top, left;
+        left = rect.left + rect.width / 2 - tooltipW / 2;
 
-      let top, left;
-      left = rect.left + rect.width / 2 - tooltipW / 2;
+        if (pos === 'top') {
+          top = rect.top - margin - actualH;
+          // Flip to bottom if tooltip would go off the top of the viewport
+          if (top < 8) top = rect.bottom + margin;
+        } else {
+          top = rect.bottom + margin;
+          // Flip to top if tooltip would go off the bottom of the viewport
+          if (top + actualH > window.innerHeight - 8) top = rect.top - margin - actualH;
+        }
 
-      if (pos === 'top') {
-        top = topPos;
-        // Flip to bottom if tooltip would go off the top of the viewport
-        if (top < 8) top = bottomPos;
-      } else {
-        top = bottomPos;
-        // Flip to top if tooltip would go off the bottom of the viewport
-        if (top + TOOLTIP_H > window.innerHeight - 8) top = topPos;
-      }
+        // Final clamp on both axes (safety net)
+        left = Math.max(8, Math.min(left, window.innerWidth - tooltipW - 8));
+        top = Math.max(8, Math.min(top, window.innerHeight - actualH - 8));
 
-      // Final clamp on both axes (safety net)
-      left = Math.max(8, Math.min(left, window.innerWidth - tooltipW - 8));
-      top = Math.max(8, Math.min(top, window.innerHeight - TOOLTIP_H - 8));
+        setTooltipStyle({
+          position: 'fixed',
+          top: `${top}px`,
+          left: `${left}px`,
+          zIndex: 70,
+          width: `${tooltipW}px`,
+        });
 
-      setTooltipStyle({
-        position: 'fixed',
-        top: `${top}px`,
-        left: `${left}px`,
-        zIndex: 70,
-        width: `${tooltipW}px`,
+        setHighlightStyle({
+          position: 'fixed',
+          top: rect.top - 6,
+          left: rect.left - 6,
+          width: rect.width + 12,
+          height: rect.height + 12,
+          zIndex: 59,
+          borderRadius: 10,
+          boxShadow: '0 0 0 9999px rgba(0,0,0,0.65)',
+          pointerEvents: 'none',
+        });
       });
-
-      setHighlightStyle({
-        position: 'fixed',
-        top: rect.top - 6,
-        left: rect.left - 6,
-        width: rect.width + 12,
-        height: rect.height + 12,
-        zIndex: 59,
-        borderRadius: 10,
-        boxShadow: '0 0 0 9999px rgba(0,0,0,0.65)',
-        pointerEvents: 'none',
-      });
-    }, 100);
+    });
 
     return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       if (prevTargetRef.current) {
         prevTargetRef.current.classList.remove(
           'relative', 'z-[60]', 'ring-2', 'ring-valorant-red',
@@ -114,7 +119,7 @@ export default function TutorialOverlay() {
       )}
 
       {/* Tooltip card */}
-      <div style={tooltipStyle} className="bg-valorant-card border border-valorant-red/60 rounded-2xl shadow-2xl p-4 flex flex-col gap-3">
+      <div ref={tooltipRef} style={tooltipStyle} className="bg-valorant-card border border-valorant-red/60 rounded-2xl shadow-2xl p-4 flex flex-col gap-3">
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-white font-bold text-base leading-snug">{currentStepDef.title}</h3>
