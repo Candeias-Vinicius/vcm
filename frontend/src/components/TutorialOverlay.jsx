@@ -45,23 +45,27 @@ export default function TutorialOverlay() {
       const pos = currentStepDef.position || 'bottom';
       const margin = 16;
       const tooltipW = Math.min(340, window.innerWidth * 0.9);
+      const TOOLTIP_H = 240; // generous estimate for flip/clamp calculations
+
+      const bottomPos = rect.bottom + margin;
+      const topPos = rect.top - margin - TOOLTIP_H;
 
       let top, left;
+      left = rect.left + rect.width / 2 - tooltipW / 2;
 
-      if (pos === 'bottom') {
-        top = rect.bottom + margin;
-        left = rect.left + rect.width / 2 - tooltipW / 2;
-      } else if (pos === 'top') {
-        top = rect.top - margin - 160; // approx tooltip height
-        left = rect.left + rect.width / 2 - tooltipW / 2;
+      if (pos === 'top') {
+        top = topPos;
+        // Flip to bottom if tooltip would go off the top of the viewport
+        if (top < 8) top = bottomPos;
       } else {
-        top = rect.bottom + margin;
-        left = rect.left + rect.width / 2 - tooltipW / 2;
+        top = bottomPos;
+        // Flip to top if tooltip would go off the bottom of the viewport
+        if (top + TOOLTIP_H > window.innerHeight - 8) top = topPos;
       }
 
-      // Clamp to viewport
+      // Final clamp on both axes (safety net)
       left = Math.max(8, Math.min(left, window.innerWidth - tooltipW - 8));
-      top = Math.max(8, top);
+      top = Math.max(8, Math.min(top, window.innerHeight - TOOLTIP_H - 8));
 
       setTooltipStyle({
         position: 'fixed',
