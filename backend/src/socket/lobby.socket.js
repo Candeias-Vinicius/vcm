@@ -1,6 +1,10 @@
 const service = require('../services/lobby.service');
 const { verifyToken } = require('../config/jwt');
 
+const MAX_HISTORY = 50;
+// In-memory chat history per lobby: Map<lobby_id, message[]>
+const chatHistory = new Map();
+
 function parseCookieToken(cookieHeader) {
   if (!cookieHeader) return null;
   const match = cookieHeader.split(';').map(c => c.trim()).find(c => c.startsWith('vcm_token='));
@@ -32,6 +36,11 @@ module.exports = function registerSocketHandlers(io) {
         const lobby = await service.getLobbyById(lobby_id);
         if (lobby) {
           socket.emit('lobby_updated', lobby);
+          // Send existing chat history to the joining client
+          const history = chatHistory.get(lobby_id) || [];
+          if (history.length > 0) {
+            socket.emit('chat_history', history);
+          }
         } else {
           socket.emit('lobby_error', { message: 'Lobby não encontrado' });
         }
@@ -42,6 +51,11 @@ module.exports = function registerSocketHandlers(io) {
 
     socket.on('leave_lobby', (lobby_id) => {
       socket.leave(lobby_id);
+      // Clean up history if no one is left in the room
+      const room = io.sockets.adapter.rooms.get(lobby_id);
+      if (!room || room.size === 0) {
+        chatHistory.delete(lobby_id);
+      }
     });
 
     // Chat: broadcast message to all users in the lobby room
@@ -58,11 +72,15 @@ module.exports = function registerSocketHandlers(io) {
       if (now - lastMessageAt < 1000) return;
       lastMessageAt = now;
 
-      io.to(lobby_id).emit('chat_message', {
-        nick: socket.data.user.nick,
-        text: trimmed,
-        ts: now,
-      });
+      const msg = { nick: socket.data.user.nick, text: trimmed, ts: now };
+
+      // Store in history (FIFO, max 50 messages)
+      if (!chatHistory.has(lobby_id)) chatHistory.set(lobby_id, []);
+      const history = chatHistory.get(lobby_id);
+      history.push(msg);
+      if (history.length > MAX_HISTORY) history.shift();
+
+      io.to(lobby_id).emit('chat_message', msg);
     });
 
     socket.on('disconnect', () => {});

@@ -15,11 +15,13 @@ function getSocket() {
   return socketInstance;
 }
 
-export function useSocket(lobbyId, onLobbyUpdated, onChatMessage) {
+export function useSocket(lobbyId, onLobbyUpdated, onChatMessage, onChatHistory) {
   const callbackRef = useRef(onLobbyUpdated);
   callbackRef.current = onLobbyUpdated;
   const chatCallbackRef = useRef(onChatMessage);
   chatCallbackRef.current = onChatMessage;
+  const historyCallbackRef = useRef(onChatHistory);
+  historyCallbackRef.current = onChatHistory;
 
   useEffect(() => {
     if (!lobbyId) return;
@@ -31,13 +33,16 @@ export function useSocket(lobbyId, onLobbyUpdated, onChatMessage) {
 
     const handleUpdate = (data) => callbackRef.current?.(data);
     const handleChat = (msg) => chatCallbackRef.current?.(msg);
+    const handleHistory = (msgs) => historyCallbackRef.current?.(msgs);
 
     socket.on('lobby_updated', handleUpdate);
     socket.on('chat_message', handleChat);
+    socket.on('chat_history', handleHistory);
 
     return () => {
       socket.off('lobby_updated', handleUpdate);
       socket.off('chat_message', handleChat);
+      socket.off('chat_history', handleHistory);
       socket.emit('leave_lobby', lobbyId);
     };
   }, [lobbyId]);
