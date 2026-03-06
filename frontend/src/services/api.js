@@ -166,4 +166,20 @@ export const api = {
    */
   leaveMatch: (id) =>
     request(`${BASE}/${id}/leave`, { method: 'DELETE' }),
+
+  /**
+   * ADM define o código personalizado da partida Valorant.
+   * @param {string} id - lobby_id
+   * @param {string} code - Código da partida personalizada
+   */
+  setCustomCode: (id, code) =>
+    request(`${BASE}/${id}/custom-code`, { method: 'POST', body: { code } }),
+
+  /**
+   * Obtém o código personalizado (somente titulares IN_GAME).
+   * @param {string} id - lobby_id
+   * @returns {{ code: string }}
+   */
+  getCustomCode: (id) =>
+    request(`${BASE}/${id}/custom-code`),
 };

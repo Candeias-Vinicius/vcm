@@ -121,6 +121,14 @@ async function togglePosition(lobby_id, nick) {
   return lobbyRepo.save(lobby);
 }
 
+async function setCustomCode(lobby_id, code, userId) {
+  const lobby = await lobbyRepo.findById(lobby_id);
+  assertLobbyExists(lobby);
+  lobby.assertAdmin(userId);
+  lobby.setCustomCode(code);
+  return lobbyRepo.save(lobby);
+}
+
 function getLobbies() {
   return lobbyRepo.findAll();
 }
@@ -143,4 +151,5 @@ module.exports = {
   togglePosition,
   getLobbies,
   getLobbyById,
+  setCustomCode,
 };

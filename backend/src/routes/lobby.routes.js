@@ -546,4 +546,83 @@ router.put('/:id/join', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /lobbies/{id}/custom-code:
+ *   post:
+ *     tags: [Lobbies]
+ *     summary: Definir código personalizado da partida (ADM)
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               code:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Código salvo com sucesso
+ *       400:
+ *         description: Sem permissão
+ */
+router.post('/:id/custom-code', requireAuth, async (req, res) => {
+  try {
+    const { code } = req.body;
+    await service.setCustomCode(req.params.id, code, req.user.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /lobbies/{id}/custom-code:
+ *   get:
+ *     tags: [Lobbies]
+ *     summary: Obter código personalizado (somente titulares quando IN_GAME)
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Código personalizado
+ *       403:
+ *         description: Acesso negado (não é titular ou partida não iniciada)
+ */
+router.get('/:id/custom-code', requireAuth, async (req, res) => {
+  try {
+    const lobby = await service.getLobbyById(req.params.id);
+    if (!lobby) return res.status(404).json({ error: 'Lobby não encontrado' });
+
+    if (lobby.status !== 'IN_GAME') {
+      return res.status(403).json({ error: 'O código só é revelado quando a partida estiver em andamento' });
+    }
+
+    const isPlayer = lobby.players.some(p => p.nick === req.user.nick);
+    if (!isPlayer) {
+      return res.status(403).json({ error: 'Apenas jogadores titulares podem ver o código' });
+    }
+
+    res.json({ code: lobby.custom_code });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
